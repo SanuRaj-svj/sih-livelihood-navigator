@@ -3,6 +3,7 @@ const TrainingProgress = require('../models/TrainingProgress');
 const BeneficiaryProfile = require('../models/BeneficiaryProfile');
 const NSQFCourse = require('../models/NSQFCourse');
 const TrainingCenter = require('../models/TrainingCenter');
+const Outcome = require('../models/Outcome');
 
 // @desc    Beneficiary self-enrollment in a course and center
 // @route   POST /api/enrollments
@@ -98,15 +99,24 @@ const getOwnEnrollments = async (req, res, next) => {
 
     const enrollmentIds = enrollments.map((e) => e._id);
     const progressList = await TrainingProgress.find({ enrollmentId: { $in: enrollmentIds } });
+    const outcomeList = await Outcome.find({ beneficiaryId: profile._id });
 
     const progressMap = {};
     progressList.forEach((p) => {
       progressMap[p.enrollmentId.toString()] = p;
     });
 
+    const outcomeMap = {};
+    outcomeList.forEach((o) => {
+      if (o.enrollmentId) {
+        outcomeMap[o.enrollmentId.toString()] = o;
+      }
+    });
+
     const data = enrollments.map((e) => ({
       ...e.toObject(),
       progress: progressMap[e._id.toString()] || null,
+      outcome: outcomeMap[e._id.toString()] || null,
     }));
 
     res.status(200).json({
