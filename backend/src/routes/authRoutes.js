@@ -1,7 +1,8 @@
 const express = require('express');
 const { body } = require('express-validator');
-const { register, login, getMe } = require('../controllers/authController');
+const { register, registerOfficer, login, getMe } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
+const { requireRole } = require('../middleware/roleMiddleware');
 
 const router = express.Router();
 
@@ -20,7 +21,13 @@ const loginValidation = [
   body('password').notEmpty().withMessage('Password is required'),
 ];
 
+// Public registration (forced BENEFICIARY role)
 router.post('/register', registerValidation, register);
+
+// Admin-only creation of OFFICER or ADMIN accounts
+router.post('/register-officer', protect, requireRole('ADMIN'), registerValidation, registerOfficer);
+
+// Login and Profile
 router.post('/login', loginValidation, login);
 router.get('/me', protect, getMe);
 

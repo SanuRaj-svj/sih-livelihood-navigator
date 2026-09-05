@@ -9,7 +9,7 @@ const generateToken = (id) => {
   });
 };
 
-// @desc    Register a new user
+// @desc    Register a new beneficiary user (Public)
 // @route   POST /api/auth/register
 // @access  Public
 const register = async (req, res, next) => {
@@ -22,7 +22,7 @@ const register = async (req, res, next) => {
       });
     }
 
-    const { name, phone, email, password, role, district, state } = req.body;
+    const { name, phone, email, password, district, state } = req.body;
 
     const existingUser = await User.findOne({
       $or: [{ email: email.toLowerCase() }, { phone }],
@@ -35,12 +35,13 @@ const register = async (req, res, next) => {
       });
     }
 
+    // Hardcode role to BENEFICIARY for all public registrations
     const user = await User.create({
       name,
       phone,
       email: email.toLowerCase(),
       passwordHash: password,
-      role: role || 'BENEFICIARY',
+      role: 'BENEFICIARY',
       district: district || '',
       state: state || '',
     });
@@ -58,6 +59,66 @@ const register = async (req, res, next) => {
         district: user.district,
         state: user.state,
         token,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Register a new Officer or Admin account (Admin only)
+// @route   POST /api/auth/register-officer
+// @access  Private (ADMIN only)
+const registerOfficer = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        errors: errors.array(),
+      });
+    }
+
+    const { name, phone, email, password, role, district, state } = req.body;
+
+    if (!role || !['OFFICER', 'ADMIN'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Role must be specified as OFFICER or ADMIN',
+      });
+    }
+
+    const existingUser = await User.findOne({
+      $or: [{ email: email.toLowerCase() }, { phone }],
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'User already exists with this email or phone number',
+      });
+    }
+
+    const user = await User.create({
+      name,
+      phone,
+      email: email.toLowerCase(),
+      passwordHash: password,
+      role,
+      district: district || '',
+      state: state || '',
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        district: user.district,
+        state: user.state,
       },
     });
   } catch (error) {
@@ -134,6 +195,7 @@ const getMe = async (req, res, next) => {
 
 module.exports = {
   register,
+  registerOfficer,
   login,
   getMe,
 };

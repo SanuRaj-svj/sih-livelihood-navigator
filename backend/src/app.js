@@ -6,6 +6,11 @@ const beneficiaryRoutes = require('./routes/beneficiaryRoutes');
 const courseRoutes = require('./routes/courseRoutes');
 const centerRoutes = require('./routes/centerRoutes');
 const opportunityRoutes = require('./routes/opportunityRoutes');
+const recommendationRoutes = require('./routes/recommendationRoutes');
+const enrollmentRoutes = require('./routes/enrollmentRoutes');
+const outcomeRoutes = require('./routes/outcomeRoutes');
+const interventionRoutes = require('./routes/interventionRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const notFoundHandler = require('./middleware/notFoundHandler');
 const errorHandler = require('./middleware/errorHandler');
@@ -21,6 +26,11 @@ app.use('/api/beneficiaries', beneficiaryRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/centres', centerRoutes);
 app.use('/api/opportunities', opportunityRoutes);
+app.use('/api/recommendations', recommendationRoutes);
+app.use('/api/enrollments', enrollmentRoutes);
+app.use('/api/outcomes', outcomeRoutes);
+app.use('/api/interventions', interventionRoutes);
+app.use('/api/admin/dashboard', dashboardRoutes);
 
 // 404 Handler
 app.use(notFoundHandler);
