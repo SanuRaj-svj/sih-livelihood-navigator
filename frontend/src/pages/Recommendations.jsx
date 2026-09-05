@@ -3,12 +3,29 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedCounter from '../components/AnimatedCounter';
 import client from '../api/client';
+import { useLanguage } from '../context/LanguageContext';
 import { CardSkeleton } from '../components/SkeletonLoader';
-import { Sparkles, BookOpen, Building2, Briefcase, CheckCircle2, ArrowRight, MapPin, Award, Layers, X } from 'lucide-react';
+import { Sparkles, BookOpen, Building2, Briefcase, CheckCircle2, ArrowRight, MapPin, Award, Layers, X, Phone, Users, ShieldCheck, Info } from 'lucide-react';
+import { MatchMascot, EmptyStateMascot } from '../components/Mascots';
+import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
+
+/*
+  BACKGROUND & TEXT COLOR CONTRACT DECLARATION:
+  - Page Background: var(--color-bg) [#FFF8F0 light / #14141F dark]
+  - Card Surface: var(--color-surface) [#FFFFFF light / #1E1E2E dark]
+  - Primary Text (Headings): var(--color-text-primary) [#1A1A2E light / #FAFAFA dark]
+  - Secondary Text (Body/Labels): var(--color-text-secondary) [#4A4A5E light / #C4C4D4 dark]
+  - Muted Text (Placeholders): var(--color-text-muted) [#8B8B9E both]
+  - Primary Accent Button: var(--color-accent-primary) [#E85D2E light / #FF8B5E dark]
+  - Secondary Accent (Badges): var(--color-accent-secondary) [#0F766E light / #2DD4BF dark]
+  - Border Color: var(--color-border) [#E8E2D9 light / #2E2E42 dark]
+*/
 
 const Recommendations = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
+
   const [loading, setLoading] = useState(true);
   const [recommendations, setRecommendations] = useState([]);
   const [centers, setCenters] = useState([]);
@@ -18,6 +35,9 @@ const Recommendations = () => {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [selectedCenterId, setSelectedCenterId] = useState('');
   const [enrolling, setEnrolling] = useState(false);
+
+  // Modal State for Training Centre / Opportunity View Details
+  const [selectedDetailsItem, setSelectedDetailsItem] = useState(null);
 
   useEffect(() => {
     fetchRecommendationsAndCenters();
@@ -57,7 +77,6 @@ const Recommendations = () => {
 
   const handleOpenEnrollModal = (item) => {
     setSelectedCourse(item);
-    // Auto-select first center if available
     if (centers.length > 0) {
       setSelectedCenterId(centers[0]._id);
     }
@@ -77,7 +96,12 @@ const Recommendations = () => {
       });
 
       if (res.data.success) {
-        toast.success(`Successfully enrolled in ${selectedCourse.details.courseName}!`);
+        confetti({
+          particleCount: 90,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+        toast.success(`Successfully enrolled in ${selectedCourse.details?.courseName || 'Training Course'}! 🎉`);
         setSelectedCourse(null);
         navigate('/roadmap');
       }
@@ -96,55 +120,57 @@ const Recommendations = () => {
   const getTypeBadge = (type) => {
     switch (type) {
       case 'COURSE':
-        return { label: 'NSQF Course', bg: 'bg-teal-500/20 text-teal-300 border-teal-500/30', icon: BookOpen };
+        return { label: t('nsqfCourses'), icon: BookOpen };
       case 'CENTER':
-        return { label: 'Training Centre', bg: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30', icon: Building2 };
+        return { label: t('trainingCentres'), icon: Building2 };
       case 'OPPORTUNITY':
-        return { label: 'Job / Market', bg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: Briefcase };
+        return { label: t('employmentOpps'), icon: Briefcase };
       default:
-        return { label: type, bg: 'bg-slate-800 text-slate-300 border-slate-700', icon: Sparkles };
+        return { label: type, icon: Sparkles };
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Hero Banner */}
-      <div className="glass-panel rounded-3xl p-8 border border-slate-800 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-teal-500/10 via-emerald-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 bg-[var(--color-bg)]">
+      {/* Hero Banner with MatchMascot */}
+      <div className="bg-[var(--color-surface)] rounded-3xl p-8 border border-[var(--color-border)] shadow-lg relative overflow-hidden transition-colors">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs font-bold uppercase tracking-wider mb-3">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>AI Recommendation Engine v1.0</span>
+          <div className="flex-1">
+            <div className="inline-flex items-center space-x-2 px-3.5 py-1 rounded-full badge-secondary text-xs font-black uppercase tracking-wider mb-3">
+              <Sparkles className="w-3.5 h-3.5 text-[var(--color-accent-secondary)]" />
+              <span>{t('aiEngineBadge')}</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-              Personalized Livelihood Pathways
+            <h1 className="text-3xl sm:text-4xl font-black text-[var(--color-text-primary)] tracking-tight">
+              {t('heroRecsTitle')}
             </h1>
-            <p className="text-slate-400 mt-2 max-w-2xl text-sm sm:text-base">
-              Matched tailored courses, regional training centers, and local employment opportunities based on your skills and location.
+            <p className="text-[var(--color-text-secondary)] font-medium mt-2 max-w-2xl text-sm sm:text-base">
+              {t('heroRecsSub')}
             </p>
           </div>
 
-          <Link to="/profile">
-            <motion.button
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.96 }}
-              className="px-5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-sm border border-slate-700 flex items-center space-x-2 whitespace-nowrap shadow-lg"
-            >
-              <span>Update Profile</span>
-              <ArrowRight className="w-4 h-4" />
-            </motion.button>
-          </Link>
+          <div className="flex items-center space-x-4">
+            <MatchMascot className="w-32 h-32 hidden sm:block drop-shadow-xs shrink-0" />
+            <Link to="/profile">
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                className="px-5 py-3 rounded-2xl bg-[var(--color-bg)] text-[var(--color-text-primary)] font-extrabold text-sm border border-[var(--color-border)] flex items-center space-x-2 whitespace-nowrap shadow-xs btn-bouncy"
+              >
+                <span>{t('updateProfileBtn')}</span>
+                <ArrowRight className="w-4 h-4 text-[var(--color-accent-primary)]" />
+              </motion.button>
+            </Link>
+          </div>
         </div>
       </div>
 
       {/* Category Filter Tabs */}
       <div className="flex flex-wrap items-center gap-3">
         {[
-          { key: 'ALL', label: 'All Recommendations', icon: Layers },
-          { key: 'COURSE', label: 'NSQF Courses', icon: BookOpen },
-          { key: 'CENTER', label: 'Training Centres', icon: Building2 },
-          { key: 'OPPORTUNITY', label: 'Employment Opportunities', icon: Briefcase },
+          { key: 'ALL', label: t('allRecs'), icon: Layers },
+          { key: 'COURSE', label: t('nsqfCourses'), icon: BookOpen },
+          { key: 'CENTER', label: t('trainingCentres'), icon: Building2 },
+          { key: 'OPPORTUNITY', label: t('employmentOpps'), icon: Briefcase },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = filter === tab.key;
@@ -154,13 +180,13 @@ const Recommendations = () => {
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => setFilter(tab.key)}
-              className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all ${
+              className={`flex items-center space-x-2 px-4 py-2.5 rounded-2xl text-sm font-extrabold border transition-all btn-bouncy ${
                 isActive
-                  ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-bold border-teal-400 shadow-lg shadow-teal-500/20'
-                  : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:text-white hover:bg-slate-800'
+                  ? 'btn-accent border-[var(--color-accent-primary)] shadow-md'
+                  : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border-[var(--color-border)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg)]'
               }`}
             >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-slate-950' : 'text-slate-400'}`} />
+              <Icon className="w-4 h-4" />
               <span>{tab.label}</span>
             </motion.button>
           );
@@ -175,11 +201,11 @@ const Recommendations = () => {
           ))}
         </div>
       ) : filteredRecs.length === 0 ? (
-        <div className="text-center py-16 glass-card rounded-3xl border border-slate-800">
-          <Sparkles className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-slate-300">No Recommendations Found</h3>
-          <p className="text-sm text-slate-500 max-w-md mx-auto mt-2">
-            Try adjusting your profile skills or location preferences to unlock more tailored opportunities.
+        <div className="text-center py-16 bg-[var(--color-surface)] rounded-3xl border border-[var(--color-border)] shadow-md flex flex-col items-center justify-center">
+          <EmptyStateMascot className="w-36 h-36 mb-2" />
+          <h3 className="text-xl font-black text-[var(--color-text-primary)]">{t('noRecsFound')}</h3>
+          <p className="text-sm text-[var(--color-text-secondary)] font-medium max-w-md mx-auto mt-2">
+            {t('noRecsSub')}
           </p>
         </div>
       ) : (
@@ -198,60 +224,60 @@ const Recommendations = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: index * 0.08, ease: 'easeOut' }}
                 whileHover={{ y: -4 }}
-                className="glass-card rounded-3xl p-6 border border-slate-800 hover:border-teal-500/40 transition-all flex flex-col justify-between shadow-xl relative overflow-hidden group"
+                className="bg-[var(--color-surface)] rounded-3xl p-6 border border-[var(--color-border)] hover:border-[var(--color-accent-primary)] transition-all flex flex-col justify-between shadow-md relative overflow-hidden group"
               >
                 <div>
                   {/* Top Badge & Score */}
                   <div className="flex justify-between items-start mb-4">
-                    <span className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold border uppercase tracking-wider ${badge.bg}`}>
+                    <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-black border uppercase tracking-wider badge-secondary">
                       <BadgeIcon className="w-3.5 h-3.5" />
                       <span>{badge.label}</span>
                     </span>
 
                     {/* Animated Match Score Pill */}
                     <div className="text-right">
-                      <div className="inline-flex items-center space-x-1 text-sm font-black text-teal-400 bg-teal-500/10 px-3 py-1 rounded-xl border border-teal-500/20">
-                        <span>Match:</span>
+                      <div className="inline-flex items-center space-x-1 text-sm font-black text-[var(--color-accent-primary)] bg-[var(--color-bg)] px-3 py-1 rounded-xl border border-[var(--color-border)] shadow-xs">
+                        <span>{t('matchScore')}:</span>
                         <AnimatedCounter start={0} end={matchScorePct} duration={1.2} suffix="%" />
                       </div>
                     </div>
                   </div>
 
                   {/* Score Progress Bar Fill */}
-                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mb-5">
+                  <div className="w-full h-2 bg-[var(--color-bg)] rounded-full overflow-hidden mb-5 border border-[var(--color-border)]">
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${matchScorePct}%` }}
                       transition={{ duration: 1, delay: 0.2 + index * 0.08 }}
-                      className="h-full bg-gradient-to-r from-teal-500 to-emerald-400 rounded-full"
+                      className="h-full bg-[var(--color-accent-primary)] rounded-full"
                     />
                   </div>
 
                   {/* Title & Details */}
-                  <h3 className="text-lg font-extrabold text-white group-hover:text-teal-300 transition-colors">
+                  <h3 className="text-lg font-black text-[var(--color-text-primary)] group-hover:text-[var(--color-accent-primary)] transition-colors">
                     {title}
                   </h3>
 
                   {item?.details?.sector && (
-                    <p className="text-xs text-slate-400 mt-1 flex items-center space-x-1">
-                      <Award className="w-3.5 h-3.5 text-teal-400 inline" />
-                      <span>Sector: {item.details.sector}</span>
+                    <p className="text-xs font-medium text-[var(--color-text-secondary)] mt-1 flex items-center space-x-1">
+                      <Award className="w-3.5 h-3.5 text-[var(--color-accent-primary)] inline" />
+                      <span>{t('sectorLabel')}: {item.details.sector}</span>
                     </p>
                   )}
 
-                  {item?.details?.address && (
-                    <p className="text-xs text-slate-400 mt-1 flex items-center space-x-1">
-                      <MapPin className="w-3.5 h-3.5 text-teal-400 inline" />
-                      <span>{item.details.address}</span>
+                  {(item?.details?.address || item?.details?.district) && (
+                    <p className="text-xs font-medium text-[var(--color-text-secondary)] mt-1 flex items-center space-x-1">
+                      <MapPin className="w-3.5 h-3.5 text-[var(--color-accent-secondary)] inline" />
+                      <span>{item.details.address || `${item.details.district}, ${item.details.state || 'MP'}`}</span>
                     </p>
                   )}
 
                   {/* Reasons list */}
-                  <div className="mt-4 pt-4 border-t border-slate-800/80 space-y-2">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Why Recommended:</p>
+                  <div className="mt-4 pt-4 border-t border-[var(--color-border)] space-y-2">
+                    <p className="text-[11px] font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider">{t('whyRecommended')}:</p>
                     {reasons.slice(0, 2).map((reason, rIdx) => (
-                      <div key={rIdx} className="flex items-start space-x-2 text-xs text-slate-300">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                      <div key={rIdx} className="flex items-start space-x-2 text-xs text-[var(--color-text-secondary)] font-medium">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-accent-secondary)] shrink-0 mt-0.5" />
                         <span>{reason}</span>
                       </div>
                     ))}
@@ -259,23 +285,24 @@ const Recommendations = () => {
                 </div>
 
                 {/* Card Action */}
-                <div className="mt-6 pt-4 border-t border-slate-800/60 flex justify-between items-center">
+                <div className="mt-6 pt-4 border-t border-[var(--color-border)] flex gap-2 justify-between items-center">
                   {item.type === 'COURSE' ? (
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => handleOpenEnrollModal(item)}
-                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-bold text-xs shadow-md shadow-teal-500/20 flex items-center justify-center space-x-1.5"
+                      className="w-full py-2.5 rounded-xl btn-accent font-extrabold text-xs shadow-md flex items-center justify-center space-x-1.5 btn-bouncy"
                     >
-                      <span>Enroll in Training</span>
+                      <span>{t('enrollInTraining')}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </motion.button>
                   ) : (
                     <button
-                      onClick={() => toast.success(`Saved ${item.details.name || item.details.title} to bookmarks`)}
-                      className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-colors"
+                      onClick={() => setSelectedDetailsItem(item)}
+                      className="w-full py-2.5 rounded-xl bg-[var(--color-bg)] text-[var(--color-text-primary)] hover:bg-[var(--color-surface)] text-xs font-extrabold border border-[var(--color-border)] transition-colors btn-bouncy flex items-center justify-center space-x-1.5"
                     >
-                      View Details
+                      <Info className="w-3.5 h-3.5 text-[var(--color-accent-primary)]" />
+                      <span>{t('viewDetails')}</span>
                     </button>
                   )}
                 </div>
@@ -285,52 +312,186 @@ const Recommendations = () => {
         </div>
       )}
 
-      {/* Enrollment Confirmation Modal */}
+      {/* VIEW DETAILS MODAL FOR TRAINING CENTRES & OPPORTUNITIES */}
       <AnimatePresence>
-        {selectedCourse && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+        {selectedDetailsItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="w-full max-w-lg glass-panel rounded-3xl p-6 border border-slate-800 shadow-2xl relative"
+              className="w-full max-w-xl bg-[var(--color-surface)] rounded-3xl p-6 sm:p-8 border border-[var(--color-border)] shadow-2xl relative space-y-6 max-h-[90vh] overflow-y-auto"
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setSelectedDetailsItem(null)}
+                className="absolute top-4 right-4 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] p-2 rounded-xl bg-[var(--color-bg)] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Modal Header */}
+              <div className="flex items-center space-x-3 pr-8">
+                <div className="w-12 h-12 rounded-2xl bg-[var(--color-bg)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-accent-primary)] shrink-0">
+                  {selectedDetailsItem.type === 'CENTER' ? <Building2 className="w-6 h-6" /> : <Briefcase className="w-6 h-6" />}
+                </div>
+                <div>
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border badge-secondary mb-1">
+                    {getTypeBadge(selectedDetailsItem.type).label}
+                  </span>
+                  <h3 className="text-xl font-black text-[var(--color-text-primary)]">
+                    {selectedDetailsItem.details?.name || selectedDetailsItem.details?.title || selectedDetailsItem.details?.courseName || 'Details View'}
+                  </h3>
+                </div>
+              </div>
+
+              {/* Match Score Banner */}
+              <div className="bg-[var(--color-bg)] p-4 rounded-2xl border border-[var(--color-border)] flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <ShieldCheck className="w-5 h-5 text-[var(--color-accent-secondary)]" />
+                  <span className="text-xs font-bold text-[var(--color-text-secondary)]">AI Match Compatibility Score</span>
+                </div>
+                <span className="text-base font-black text-[var(--color-accent-primary)]">
+                  {Math.round((selectedDetailsItem.score || 0) * 100)}% Match
+                </span>
+              </div>
+
+              {/* Detailed Grid Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                {/* Location / Address */}
+                <div className="bg-[var(--color-bg)] p-4 rounded-2xl border border-[var(--color-border)] space-y-1">
+                  <p className="font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider flex items-center space-x-1">
+                    <MapPin className="w-3.5 h-3.5 text-[var(--color-accent-primary)]" />
+                    <span>{t('addressLabel')}</span>
+                  </p>
+                  <p className="font-bold text-[var(--color-text-primary)]">
+                    {selectedDetailsItem.details?.address || `${selectedDetailsItem.details?.district || 'Bhopal'}, ${selectedDetailsItem.details?.state || 'Madhya Pradesh'}`}
+                  </p>
+                </div>
+
+                {/* Sector / Industry */}
+                <div className="bg-[var(--color-bg)] p-4 rounded-2xl border border-[var(--color-border)] space-y-1">
+                  <p className="font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider flex items-center space-x-1">
+                    <Award className="w-3.5 h-3.5 text-[var(--color-accent-secondary)]" />
+                    <span>{t('sectorLabel')}</span>
+                  </p>
+                  <p className="font-bold text-[var(--color-text-primary)]">
+                    {selectedDetailsItem.details?.sector || 'Handlooms, Handicrafts & Textiles'}
+                  </p>
+                </div>
+
+                {/* Contact Information */}
+                <div className="bg-[var(--color-bg)] p-4 rounded-2xl border border-[var(--color-border)] space-y-1">
+                  <p className="font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider flex items-center space-x-1">
+                    <Phone className="w-3.5 h-3.5 text-[var(--color-accent-secondary)]" />
+                    <span>{t('contactLabel')}</span>
+                  </p>
+                  <p className="font-bold text-[var(--color-text-primary)]">
+                    {selectedDetailsItem.details?.contactNumber || '+91 98765 43210 (District Hub Helpdesk)'}
+                  </p>
+                </div>
+
+                {/* Capacity / Openings */}
+                <div className="bg-[var(--color-bg)] p-4 rounded-2xl border border-[var(--color-border)] space-y-1">
+                  <p className="font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider flex items-center space-x-1">
+                    <Users className="w-3.5 h-3.5 text-[var(--color-accent-primary)]" />
+                    <span>{t('capacityLabel')}</span>
+                  </p>
+                  <p className="font-bold text-[var(--color-text-primary)]">
+                    {selectedDetailsItem.details?.capacity ? `${selectedDetailsItem.details.capacity} Seats Available` : 'Open Batch / Regional Enrolment Active'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Facility Highlights / Requirements */}
+              <div className="bg-[var(--color-bg)] p-4 rounded-2xl border border-[var(--color-border)] space-y-2">
+                <p className="text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider">{t('facilitiesLabel')}:</p>
+                <div className="flex flex-wrap gap-2">
+                  {['NSQF Certified Instructors', 'Stipend Support Available', 'Local Transport & Hostel Facility', 'Post-Training Placement Assistance'].map((feat, fIdx) => (
+                    <span key={fIdx} className="px-3 py-1 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text-primary)] flex items-center space-x-1">
+                      <CheckCircle2 className="w-3 h-3 text-[var(--color-accent-secondary)]" />
+                      <span>{feat}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Why Recommended Reasons */}
+              {selectedDetailsItem.reasons?.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider">{t('whyRecommended')}:</p>
+                  <div className="space-y-1.5">
+                    {selectedDetailsItem.reasons.map((r, rIdx) => (
+                      <div key={rIdx} className="flex items-start space-x-2 text-xs text-[var(--color-text-secondary)] font-medium">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-accent-secondary)] shrink-0 mt-0.5" />
+                        <span>{r}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div className="flex justify-end space-x-3 pt-4 border-t border-[var(--color-border)]">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDetailsItem(null)}
+                  className="px-5 py-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text-primary)] text-xs font-extrabold hover:opacity-90 btn-bouncy"
+                >
+                  {t('closeBtn')}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Enrollment Confirmation Modal */}
+      <AnimatePresence>
+        {selectedCourse && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="w-full max-w-lg bg-[var(--color-surface)] rounded-3xl p-6 sm:p-8 border border-[var(--color-border)] shadow-2xl relative"
             >
               <button
                 onClick={() => setSelectedCourse(null)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 rounded-xl bg-slate-800/60"
+                className="absolute top-4 right-4 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] p-2 rounded-xl bg-[var(--color-bg)]"
               >
                 <X className="w-5 h-5" />
               </button>
 
               <div className="flex items-center space-x-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400">
+                <div className="w-10 h-10 rounded-xl bg-[var(--color-bg)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-accent-primary)]">
                   <BookOpen className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">Course Enrollment</h3>
-                  <p className="text-xs text-slate-400">Confirm your training center selection</p>
+                  <h3 className="text-lg font-black text-[var(--color-text-primary)]">Course Enrollment</h3>
+                  <p className="text-xs text-[var(--color-text-secondary)] font-medium">Confirm your training center selection</p>
                 </div>
               </div>
 
               <div className="space-y-4 my-6">
-                <div className="bg-slate-900/80 rounded-2xl p-4 border border-slate-800">
-                  <p className="text-xs text-teal-400 font-bold uppercase tracking-wider">Selected Course</p>
-                  <p className="text-base font-extrabold text-white mt-1">{selectedCourse.details.courseName}</p>
-                  <p className="text-xs text-slate-400 mt-1">Sector: {selectedCourse.details.sector} | NSQF Level {selectedCourse.details.nsqfLevel || '4'}</p>
+                <div className="bg-[var(--color-bg)] rounded-2xl p-4 border border-[var(--color-border)]">
+                  <p className="text-xs text-[var(--color-accent-primary)] font-extrabold uppercase tracking-wider">Selected Course</p>
+                  <p className="text-base font-black text-[var(--color-text-primary)] mt-1">{selectedCourse.details?.courseName}</p>
+                  <p className="text-xs text-[var(--color-text-secondary)] font-medium mt-1">Sector: {selectedCourse.details?.sector} | NSQF Level {selectedCourse.details?.nsqfLevel || '4'}</p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase mb-2">Select Regional Training Center</label>
+                  <label className="block text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2">Select Regional Training Center</label>
                   {centers.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">No specific centers loaded. Using default regional hub.</p>
+                    <p className="text-xs text-[var(--color-text-muted)] italic">No specific centers loaded. Using default regional hub.</p>
                   ) : (
                     <select
                       value={selectedCenterId}
                       onChange={(e) => setSelectedCenterId(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 focus:border-teal-500 rounded-xl px-4 py-3 text-sm text-white outline-none"
+                      className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] focus:border-[var(--color-accent-primary)] focus:ring-2 focus:ring-[var(--color-accent-primary)]/20 rounded-xl px-4 py-3 text-sm text-[var(--color-text-primary)] font-bold outline-none cursor-pointer"
                     >
                       {centers.map((c) => (
-                        <option key={c._id} value={c._id}>
+                        <option key={c._id} value={c._id} className="bg-[var(--color-surface)] text-[var(--color-text-primary)]">
                           {c.name} - {c.district || c.address}
                         </option>
                       ))}
@@ -339,11 +500,11 @@ const Recommendations = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4 border-t border-slate-800">
+              <div className="flex justify-end space-x-3 pt-4 border-t border-[var(--color-border)]">
                 <button
                   type="button"
                   onClick={() => setSelectedCourse(null)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm font-semibold hover:bg-slate-800"
+                  className="px-4 py-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text-primary)] text-sm font-extrabold hover:opacity-90 btn-bouncy"
                 >
                   Cancel
                 </button>
@@ -352,10 +513,10 @@ const Recommendations = () => {
                   whileTap={{ scale: 0.97 }}
                   disabled={enrolling}
                   onClick={handleConfirmEnroll}
-                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-bold text-sm shadow-lg shadow-teal-500/20 flex items-center space-x-2 disabled:opacity-50"
+                  className="px-6 py-2.5 rounded-xl btn-accent font-black text-sm shadow-md flex items-center space-x-2 btn-bouncy disabled:opacity-50"
                 >
                   {enrolling ? (
-                    <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
                       <span>Confirm & Enroll</span>
