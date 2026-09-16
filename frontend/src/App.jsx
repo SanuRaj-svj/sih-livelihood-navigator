@@ -12,6 +12,7 @@ import ProfileForm from './pages/ProfileForm';
 import Recommendations from './pages/Recommendations';
 import Roadmap from './pages/Roadmap';
 import OfficerDashboard from './pages/OfficerDashboard';
+import IvrDemo from './pages/IvrDemo';
 
 // Animated Route Wrapper for Framer Motion Page Transitions
 const AnimatedRoutes = () => {
@@ -31,6 +32,7 @@ const AnimatedRoutes = () => {
           <Route path="/" element={<Navigate to="/recommendations" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/ivr-demo" element={<IvrDemo />} />
 
           <Route
             path="/profile"

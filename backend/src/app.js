@@ -12,6 +12,7 @@ const enrollmentRoutes = require('./routes/enrollmentRoutes');
 const outcomeRoutes = require('./routes/outcomeRoutes');
 const interventionRoutes = require('./routes/interventionRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const ivrRoutes = require('./routes/ivrRoutes');
 
 const notFoundHandler = require('./middleware/notFoundHandler');
 const errorHandler = require('./middleware/errorHandler');
@@ -20,6 +21,7 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
 // Routes
 app.use('/api', healthRoutes);
@@ -33,6 +35,7 @@ app.use('/api/enrollments', enrollmentRoutes);
 app.use('/api/outcomes', outcomeRoutes);
 app.use('/api/interventions', interventionRoutes);
 app.use('/api/admin/dashboard', dashboardRoutes);
+app.use('/api/ivr', ivrRoutes);
 
 // 404 Handler
 app.use(notFoundHandler);

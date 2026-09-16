@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Sparkles, Map, User, LayoutDashboard, LogOut, Compass, Sun, Moon, Globe } from 'lucide-react';
+import { Sparkles, Map, User, LayoutDashboard, LogOut, Compass, Sun, Moon, Globe, PhoneCall } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 /*
@@ -63,6 +63,20 @@ const Navbar = () => {
         </Link>
 
         {/* Navigation Links */}
+        <Link to="/ivr-demo" className="hidden md:block">
+          <motion.div
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-colors ${
+              location.pathname === '/ivr-demo'
+                ? 'border border-[var(--color-accent-primary)] bg-[var(--color-bg)] text-[var(--color-accent-primary)]'
+                : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text-primary)]'
+            }`}
+          >
+            <PhoneCall className="h-4 w-4" />
+            <span>IVR Demo</span>
+          </motion.div>
+        </Link>
         {user && (
           <nav className="hidden md:flex items-center space-x-1">
             {filteredNav.map((item) => {
