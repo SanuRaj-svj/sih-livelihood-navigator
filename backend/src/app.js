@@ -13,6 +13,7 @@ const outcomeRoutes = require('./routes/outcomeRoutes');
 const interventionRoutes = require('./routes/interventionRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const ivrRoutes = require('./routes/ivrRoutes');
+const credentialRoutes = require('./routes/credentialRoutes');
 
 const notFoundHandler = require('./middleware/notFoundHandler');
 const errorHandler = require('./middleware/errorHandler');
@@ -36,6 +37,7 @@ app.use('/api/outcomes', outcomeRoutes);
 app.use('/api/interventions', interventionRoutes);
 app.use('/api/admin/dashboard', dashboardRoutes);
 app.use('/api/ivr', ivrRoutes);
+app.use('/api/credentials', credentialRoutes);
 
 // 404 Handler
 app.use(notFoundHandler);

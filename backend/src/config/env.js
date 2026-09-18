@@ -14,6 +14,10 @@ const env = {
   EMAIL_USER: process.env.EMAIL_USER || '',
   EMAIL_APP_PASSWORD: process.env.EMAIL_APP_PASSWORD || '',
   EMAIL_RECIPIENT: process.env.EMAIL_RECIPIENT || '',
+  BLOCKCHAIN_NETWORK: process.env.BLOCKCHAIN_NETWORK || 'local-mock',
+  BLOCKCHAIN_RPC_URL: process.env.BLOCKCHAIN_RPC_URL || '',
+  BLOCKCHAIN_PRIVATE_KEY: process.env.BLOCKCHAIN_PRIVATE_KEY || '',
+  BLOCKCHAIN_CONTRACT_ADDRESS: process.env.BLOCKCHAIN_CONTRACT_ADDRESS || '',
 };
 
 module.exports = env;
