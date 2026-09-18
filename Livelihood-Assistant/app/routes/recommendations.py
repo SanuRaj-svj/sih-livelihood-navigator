@@ -1,6 +1,7 @@
 """NSQF recommendation routes."""
 
 from pathlib import Path
+from functools import lru_cache
 from fastapi import APIRouter, Depends, status
 from app.core.config import settings
 from app.data.loaders.domain_loaders import CourseLoader, OccupationLoader, OpportunityLoader, SkillLoader
@@ -14,6 +15,7 @@ from app.services.recommendation.recommender import (
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
 
 
+@lru_cache(maxsize=1)
 def get_recommendation_service() -> BaseRecommendationService:
     """Compose repositories at the application boundary; the service never reads files."""
     seed_dir = Path(settings.SEED_DATA_DIR)

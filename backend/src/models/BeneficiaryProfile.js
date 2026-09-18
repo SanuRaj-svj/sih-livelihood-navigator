@@ -11,6 +11,7 @@ const beneficiaryProfileSchema = new mongoose.Schema(
     personal: {
       age: { type: Number, min: 0 },
       gender: { type: String, trim: true },
+      community: { type: String, trim: true, default: 'unknown' },
     },
     education: {
       level: { type: String, trim: true },
@@ -72,6 +73,7 @@ const beneficiaryProfileSchema = new mongoose.Schema(
 
 // 2dsphere index for geospatial location queries
 beneficiaryProfileSchema.index({ 'location.coordinates': '2dsphere' });
+beneficiaryProfileSchema.index({ 'location.district': 1 });
 
 const BeneficiaryProfile = mongoose.model(
   'BeneficiaryProfile',

@@ -2,10 +2,13 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
+import './App.css';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
+import VoiceAssistant from './components/VoiceAssistant';
 
+import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ProfileForm from './pages/ProfileForm';
@@ -13,6 +16,7 @@ import Recommendations from './pages/Recommendations';
 import Roadmap from './pages/Roadmap';
 import OfficerDashboard from './pages/OfficerDashboard';
 import IvrDemo from './pages/IvrDemo';
+import CertificateVerifier from './pages/CertificateVerifier';
 
 // Animated Route Wrapper for Framer Motion Page Transitions
 const AnimatedRoutes = () => {
@@ -29,10 +33,11 @@ const AnimatedRoutes = () => {
         className="min-h-[calc(100vh-4rem)]"
       >
         <Routes location={location}>
-          <Route path="/" element={<Navigate to="/recommendations" replace />} />
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/ivr-demo" element={<IvrDemo />} />
+          <Route path="/certificate-verifier" element={<CertificateVerifier />} />
 
           <Route
             path="/profile"
@@ -70,7 +75,7 @@ const AnimatedRoutes = () => {
             }
           />
 
-          <Route path="*" element={<Navigate to="/recommendations" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </motion.div>
     </AnimatePresence>
@@ -86,6 +91,7 @@ function App() {
           <main className="flex-1">
             <AnimatedRoutes />
           </main>
+          <VoiceAssistant />
 
           {/* Toast Notification Container */}
           <Toaster

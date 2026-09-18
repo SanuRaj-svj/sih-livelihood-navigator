@@ -1,6 +1,7 @@
 """High-level structured deterministic livelihood assessment endpoint."""
 
 from pathlib import Path
+from functools import lru_cache
 
 from fastapi import APIRouter, Depends, status
 
@@ -18,6 +19,7 @@ from app.services.roadmap.generator import RoadmapService
 router = APIRouter(prefix="/livelihood", tags=["Livelihood Assessment"])
 
 
+@lru_cache(maxsize=1)
 def get_livelihood_assessment_service() -> LivelihoodAssessmentService:
     """Compose all existing deterministic services over one seed repository snapshot."""
     seed_dir = Path(settings.SEED_DATA_DIR)

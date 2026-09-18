@@ -40,6 +40,8 @@ const trainingProgressSchema = new mongoose.Schema(
   }
 );
 
+trainingProgressSchema.index({ attendancePercentage: 1 });
+
 const TrainingProgress = mongoose.model('TrainingProgress', trainingProgressSchema);
 
 module.exports = TrainingProgress;

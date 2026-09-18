@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Sparkles, Map, User, LayoutDashboard, LogOut, Compass, Sun, Moon, Globe, PhoneCall } from 'lucide-react';
+import { Sparkles, Map, User, LayoutDashboard, LogOut, Compass, Sun, Moon, Globe, PhoneCall, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 /*
@@ -32,38 +32,36 @@ const Navbar = () => {
   };
 
   const navItems = [
-    { labelKey: 'navRecs', path: '/recommendations', icon: Sparkles, roles: ['BENEFICIARY', 'OFFICER', 'ADMIN'] },
-    { labelKey: 'navJourney', path: '/roadmap', icon: Map, roles: ['BENEFICIARY', 'OFFICER', 'ADMIN'] },
-    { labelKey: 'navProfile', path: '/profile', icon: User, roles: ['BENEFICIARY', 'OFFICER', 'ADMIN'] },
+    { labelKey: 'navProfile', path: '/profile', icon: User, roles: ['BENEFICIARY'] },
+    { labelKey: 'navRecs', path: '/recommendations', icon: Sparkles, roles: ['BENEFICIARY'] },
+    { labelKey: 'navJourney', path: '/roadmap', icon: Map, roles: ['BENEFICIARY'] },
     { labelKey: 'navOfficer', path: '/officer-dashboard', icon: LayoutDashboard, roles: ['OFFICER', 'ADMIN'] },
+    { labelKey: 'Certificate', path: '/certificate-verifier', icon: ShieldCheck, roles: ['BENEFICIARY', 'OFFICER', 'ADMIN'] },
   ];
 
   const filteredNav = navItems.filter((item) => !user || item.roles.includes(user.role));
 
   return (
-    <header className="sticky top-0 z-50 transition-colors duration-200 bg-[var(--color-surface)] border-b border-[var(--color-border)] backdrop-blur-md shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <header className="site-navbar sticky top-0 z-50">
+      <div className="site-navbar-inner max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-[72px] flex flex-wrap items-center justify-between gap-2 py-2 sm:py-3">
         {/* Brand Logo */}
-        <Link to="/" className="flex items-center space-x-3 group">
+        <Link to="/" className="flex items-center space-x-2 sm:space-x-3 group min-w-0 shrink-0">
           <motion.div
             whileHover={{ rotate: 15, scale: 1.05 }}
             transition={{ type: 'spring', stiffness: 300 }}
-            className="w-10 h-10 rounded-xl bg-[var(--color-accent-primary)] flex items-center justify-center text-white font-bold shadow-md"
+            className="brand-mark w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-white font-bold shadow-md"
           >
-            <Compass className="w-6 h-6 stroke-[2.5]" />
+            <Compass className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
           </motion.div>
-          <div>
-            <span className="text-lg font-extrabold tracking-tight text-[var(--color-text-primary)]">
+          <div className="min-w-0">
+            <span className="block truncate text-sm sm:text-lg font-extrabold tracking-tight text-[var(--color-text-primary)]">
               {t('appName')}
-            </span>
-            <span className="block text-[10px] font-bold tracking-wider uppercase text-[var(--color-text-secondary)]">
-              {t('appSubtitle')}
             </span>
           </div>
         </Link>
 
         {/* Navigation Links */}
-        <Link to="/ivr-demo" className="hidden md:block">
+        {(!user || user.role === 'BENEFICIARY') && <Link to="/ivr-demo" className="hidden md:block">
           <motion.div
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
@@ -76,7 +74,7 @@ const Navbar = () => {
             <PhoneCall className="h-4 w-4" />
             <span>IVR Demo</span>
           </motion.div>
-        </Link>
+        </Link>}
         {user && (
           <nav className="hidden md:flex items-center space-x-1">
             {filteredNav.map((item) => {
@@ -111,9 +109,9 @@ const Navbar = () => {
         )}
 
         {/* Multi-Language Selector, Theme Toggle & User Actions */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="navbar-actions flex items-center justify-end flex-wrap gap-1.5 sm:gap-2.5">
           {/* Indian Language Switcher Dropdown */}
-          <div className="relative flex items-center bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-2.5 py-1.5 shadow-xs">
+          <div className="relative flex items-center bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-2 py-1.5 shadow-xs">
             <Globe className="w-4 h-4 text-[var(--color-accent-primary)] shrink-0 mr-1.5" />
             <select
               value={language}
@@ -122,7 +120,7 @@ const Navbar = () => {
                 const selectedLang = LANGUAGES.find(l => l.code === e.target.value);
                 toast.success(`Language set to ${selectedLang?.native || selectedLang?.name}`);
               }}
-              className="bg-transparent text-xs font-bold text-[var(--color-text-primary)] outline-none cursor-pointer pr-1"
+              className="bg-transparent text-[10px] sm:text-xs font-bold text-[var(--color-text-primary)] outline-none cursor-pointer pr-1 max-w-[96px] sm:max-w-[120px]"
             >
               {LANGUAGES.map((lang) => (
                 <option key={lang.code} value={lang.code} className="bg-[var(--color-surface)] text-[var(--color-text-primary)]">
@@ -144,7 +142,7 @@ const Navbar = () => {
           </motion.button>
 
           {user ? (
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-bold text-[var(--color-text-primary)]">{user.name}</p>
                 <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-bold border uppercase tracking-wider bg-[var(--color-bg)] text-[var(--color-accent-secondary)] border-[var(--color-accent-secondary)]">

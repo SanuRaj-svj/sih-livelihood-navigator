@@ -32,6 +32,7 @@ const OfficerDashboard = () => {
   const [summary, setSummary] = useState(null);
   const [skillDemand, setSkillDemand] = useState([]);
   const [atRiskData, setAtRiskData] = useState(null);
+  const [pendingApprovals, setPendingApprovals] = useState([]);
   const [selectedDistrict, setSelectedDistrict] = useState('');
 
   // Role Protection check
@@ -51,19 +52,31 @@ const OfficerDashboard = () => {
       setLoading(true);
       const districtQuery = selectedDistrict ? `?district=${encodeURIComponent(selectedDistrict)}` : '';
 
-      const [sumRes, demandRes, riskRes] = await Promise.all([
+      const [sumRes, demandRes, riskRes, approvalRes] = await Promise.all([
         client.get(`/admin/dashboard/summary${districtQuery}`),
         client.get('/admin/dashboard/skill-demand'),
         client.get('/admin/dashboard/at-risk'),
+        client.get('/certificates/pending'),
       ]);
 
       if (sumRes.data.success) setSummary(sumRes.data.data);
       if (demandRes.data.success) setSkillDemand(demandRes.data.data || []);
       if (riskRes.data.success) setAtRiskData(riskRes.data.data);
+      if (approvalRes.data.success) setPendingApprovals(approvalRes.data.data || []);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to fetch dashboard statistics');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCertificateApproval = async (enrollmentId, stage) => {
+    try {
+      await client.post(`/certificates/${enrollmentId}/approve`, { stage });
+      toast.success(`${stage === 'ENROLLMENT' ? 'Enrollment' : 'Completion'} certificate approved and emailed.`);
+      fetchDashboardData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to approve certificate');
     }
   };
 
@@ -280,6 +293,56 @@ const OfficerDashboard = () => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {pendingApprovals.length > 0 && (
+          <div className="bg-[var(--color-surface)] rounded-3xl p-8 border border-[var(--color-border)] shadow-xl space-y-6">
+            <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">Certificate approvals</p>
+                <h2 className="text-xl font-black text-[var(--color-text-primary)]">Pending approval queue</h2>
+              </div>
+              <span className="px-3 py-1 rounded-full badge-secondary text-xs font-bold">
+                {pendingApprovals.length} pending
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              {pendingApprovals.map((item) => (
+                <div key={item.enrollmentId} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-lg font-black text-[var(--color-text-primary)]">{item.beneficiaryName}</p>
+                      <p className="text-sm text-[var(--color-text-secondary)]">{item.courseName} • {item.centerName}</p>
+                      <p className="mt-1 text-xs text-[var(--color-text-muted)]">Status: {item.status}</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      {item.needsEnrollmentCertificate && (
+                        <button
+                          type="button"
+                          onClick={() => handleCertificateApproval(item.enrollmentId, 'ENROLLMENT')}
+                          className="rounded-xl bg-[var(--color-accent-primary)] px-4 py-2 text-sm font-bold text-white shadow-md transition hover:opacity-90"
+                        >
+                          Approve enrollment certificate
+                        </button>
+                      )}
+
+                      {item.needsCompletionCertificate && (
+                        <button
+                          type="button"
+                          onClick={() => handleCertificateApproval(item.enrollmentId, 'COMPLETION')}
+                          className="rounded-xl bg-[var(--color-accent-secondary)] px-4 py-2 text-sm font-bold text-white shadow-md transition hover:opacity-90"
+                        >
+                          Approve completion certificate
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}

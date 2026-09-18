@@ -51,12 +51,23 @@ const enrollSelf = async (req, res, next) => {
       });
     }
 
-    const enrollment = await TrainingEnrollment.create({
-      beneficiaryId: profile._id,
-      courseId,
-      centerId,
-      status: 'ENROLLED',
-    });
+    let enrollment;
+    try {
+      enrollment = await TrainingEnrollment.create({
+        beneficiaryId: profile._id,
+        courseId,
+        centerId,
+        status: 'ENROLLED',
+      });
+    } catch (error) {
+      if (error?.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message: 'Already actively enrolled in this course',
+        });
+      }
+      throw error;
+    }
 
     // Create initial TrainingProgress document
     const progress = await TrainingProgress.create({
@@ -152,6 +163,13 @@ const updateOwnProgress = async (req, res, next) => {
         return res.status(403).json({
           success: false,
           message: 'Not authorized to update this enrollment progress',
+        });
+      }
+      if (!enrollment.enrollmentCertificateVerifiedAt) {
+        return res.status(403).json({
+          success: false,
+          message: 'Enter and verify your enrollment certificate ID before resuming the course',
+          code: 'ENROLLMENT_CERTIFICATE_REQUIRED',
         });
       }
     }

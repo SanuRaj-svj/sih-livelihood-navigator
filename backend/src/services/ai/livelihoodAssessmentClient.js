@@ -35,7 +35,7 @@ const toAiProfile = (profile) => ({
   beneficiary_id: String(profile._id || profile.userId || ''),
   age: profile.personal?.age ?? null,
   gender: normalizeGender(profile.personal?.gender),
-  community: 'SC',
+  community: profile.personal?.community || 'unknown',
   education_level: EDUCATION_LEVELS[profile.education?.level] || 'unknown',
   education_field: profile.education?.field || null,
   location: profile.location?.state && profile.location?.district
@@ -78,6 +78,7 @@ const toRecommendationCard = (pathway) => {
     reasons: [recommendation.explanation, ...pathway.limitations].filter(Boolean),
     details: {
       courseName: course?.course_name,
+      courseId: recommendation.course_reference,
       qualificationName: course?.qualification_name || course?.qp_code,
       sector: occupation?.sector || course?.sector,
       nsqfLevel: course?.nsqf_level,

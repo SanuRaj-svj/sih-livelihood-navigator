@@ -8,7 +8,7 @@ from typing import Optional
 # identical recognition or localization quality for every listed language.
 SUPPORTED_LANGUAGE_CODES = frozenset({
     "as", "bn", "brx", "doi", "en", "gu", "hi", "kn", "kok", "ks", "mai",
-    "ml", "mni", "mr", "ne", "or", "pa", "sa", "sat", "sd", "ta", "te", "ur",
+    "bho", "bns", "mag", "ml", "mni", "mr", "ne", "or", "pa", "sa", "sat", "sd", "ta", "te", "ur",
 })
 UNKNOWN_LANGUAGE = "unknown"
 

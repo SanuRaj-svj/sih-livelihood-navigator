@@ -40,6 +40,9 @@ const outcomeSchema = new mongoose.Schema(
   }
 );
 
+outcomeSchema.index({ beneficiaryId: 1, outcomeType: 1 });
+outcomeSchema.index({ enrollmentId: 1 });
+
 const Outcome = mongoose.model('Outcome', outcomeSchema);
 
 module.exports = Outcome;

@@ -4,7 +4,7 @@ import gsap from 'gsap';
 import client from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import { CardSkeleton } from '../components/SkeletonLoader';
-import { Map, BookOpen, Building2, CheckCircle2, Clock, Sparkles, Trophy, IndianRupee, Briefcase, ArrowUpRight } from 'lucide-react';
+import { Map, BookOpen, Building2, CheckCircle2, Clock, Sparkles, Trophy, IndianRupee, Briefcase, ArrowUpRight, ShieldCheck } from 'lucide-react';
 import { JourneyMascot, EmptyStateMascot } from '../components/Mascots';
 import toast from 'react-hot-toast';
 
@@ -24,6 +24,8 @@ const Roadmap = () => {
   const { t } = useLanguage();
   const [enrollments, setEnrollments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [certificateId, setCertificateId] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -41,6 +43,21 @@ const Roadmap = () => {
       toast.error(err.response?.data?.message || 'Failed to fetch journey enrollments');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const unlockCourse = async () => {
+    if (!certificateId.trim()) return;
+    try {
+      setUnlocking(true);
+      await client.post('/certificates/unlock', { certificateId: certificateId.trim() });
+      toast.success('Enrollment certificate verified. Course access unlocked.');
+      setCertificateId('');
+      await fetchMyEnrollments();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Certificate verification failed');
+    } finally {
+      setUnlocking(false);
     }
   };
 
@@ -132,6 +149,23 @@ const Roadmap = () => {
         </div>
       ) : (
         <div className="space-y-8">
+          {enrollments.some((enrollment) => !enrollment.enrollmentCertificateVerifiedAt) && (
+            <div className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-md">
+              <div className="flex items-center gap-3">
+                <ShieldCheck className="h-6 w-6 text-[var(--color-accent-primary)]" />
+                <div>
+                  <h2 className="text-lg font-black text-[var(--color-text-primary)]">Verify your enrollment certificate</h2>
+                  <p className="text-sm text-[var(--color-text-secondary)]">Enter the certificate ID approved by an administrator to resume your course.</p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <input value={certificateId} onChange={(event) => setCertificateId(event.target.value)} placeholder="CERT-..." className="app-input min-w-0 flex-1 rounded-xl px-4 py-3" />
+                <button type="button" onClick={unlockCourse} disabled={unlocking} className="btn-accent rounded-xl px-5 py-3 font-bold disabled:opacity-60">
+                  {unlocking ? 'Verifying...' : 'Verify & Resume'}
+                </button>
+              </div>
+            </div>
+          )}
           {enrollments.map((enrollment, index) => {
             const courseName = enrollment.courseId?.courseName || 'NSQF Training Course';
             const centerName = enrollment.centerId?.name || 'Regional Skill Center';

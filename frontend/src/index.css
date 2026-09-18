@@ -38,6 +38,19 @@ html.dark {
   --color-border: #2E2E42;
 }
 
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  overflow-x: hidden;
+}
+
 body {
   background-color: var(--color-bg);
   color: var(--color-text-primary);
@@ -46,6 +59,28 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+a,
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+img,
+svg,
+canvas,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 15px;
+  }
 }
 
 h1, h2, h3, h4, h5, h6 {

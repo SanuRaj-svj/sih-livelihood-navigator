@@ -198,6 +198,11 @@ pytest -v
 | `POST` | `/v1/market/demand` | Query district/regional market skill demand |
 | `POST` | `/v1/roadmap` | Generate step-by-step career & skilling roadmaps |
 | `POST` | `/v1/channel/interact` | Channel-agnostic text/audio interaction boundary |
+| `POST` | `/v1/knowledge/ask` | Answer questions using grounded Atlas Vector Search retrieval |
+
+### RAG setup
+
+The Python service uses MongoDB Atlas Vector Search for persistent knowledge chunks. Configure `MONGODB_URI`, `GEMINI_API_KEY`, and the `VECTOR_*` settings from `.env.example`, create the vector index definition in `docs/api_spec.md`, then run `python scripts/index_knowledge.py` from this directory. The endpoint returns source chunk IDs and similarity scores with each answer.
 
 ---
 

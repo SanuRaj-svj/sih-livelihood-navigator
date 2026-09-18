@@ -30,5 +30,6 @@ async def check_health() -> HealthResponse:
             "recommendation_engine": "registered",
             "market_demand": "registered",
             "roadmap_generator": "registered",
+            "vector_store": "configured" if settings.MONGODB_URI else "not_configured",
         },
     )

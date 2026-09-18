@@ -34,7 +34,6 @@ const createOutcome = async (req, res, next) => {
     if (enrollmentId) {
       const enrollment = await TrainingEnrollment.findById(enrollmentId);
       if (enrollment) {
-        // If outcome achieved, mark enrollment COMPLETED
         enrollment.status = 'COMPLETED';
         await enrollment.save();
       }

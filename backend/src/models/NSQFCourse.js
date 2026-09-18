@@ -37,6 +37,9 @@ const nsqfCourseSchema = new mongoose.Schema(
   }
 );
 
+nsqfCourseSchema.index({ sector: 1 });
+nsqfCourseSchema.index({ courseName: 1 });
+
 const NSQFCourse = mongoose.model('NSQFCourse', nsqfCourseSchema);
 
 module.exports = NSQFCourse;

@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = Field(default="", description="Google Gemini API key")
     GEMINI_MODEL: str = "gemini-2.0-flash"
     GEMINI_TIMEOUT_SECONDS: float = Field(default=20.0, gt=0.0, le=120.0)
+    GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
+    GEMINI_EMBEDDING_DIMENSIONS: int = Field(default=768, ge=1, le=3072)
     PROFILE_EXTRACTION_MODEL_VERSION: str = "phase-6-gemini-json-v1"
     BHASHINI_API_KEY: str = Field(default="", description="Bhashini ASR/TTS API key")
     BHASHINI_USER_ID: str = Field(default="", description="Bhashini User identifier")
@@ -44,6 +46,15 @@ class Settings(BaseSettings):
     # Regional / Rules Data Storage
     DATA_DIR: str = "./data"
     SEED_DATA_DIR: str = "./data/seed"
+
+    # RAG storage. MongoDB Atlas Vector Search uses the same cluster family
+    # as the Node application but a separate collection and vector index.
+    MONGODB_URI: str = ""
+    VECTOR_DB_NAME: str = "livelihood_navigator"
+    VECTOR_COLLECTION: str = "knowledge_chunks"
+    VECTOR_INDEX_NAME: str = "knowledge_vector_index"
+    VECTOR_TOP_K: int = Field(default=5, ge=1, le=20)
+    VECTOR_NUM_CANDIDATES: int = Field(default=50, ge=1, le=1000)
 
     # Skill normalization.  Fuzzy candidates below this threshold are UNKNOWN.
     SKILL_NORMALIZATION_MIN_CONFIDENCE: float = Field(default=0.90, ge=0.0, le=1.0)

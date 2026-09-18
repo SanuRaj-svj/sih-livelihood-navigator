@@ -38,6 +38,9 @@ const interventionSchema = new mongoose.Schema(
   }
 );
 
+interventionSchema.index({ beneficiaryId: 1, status: 1 });
+interventionSchema.index({ status: 1, riskLevel: 1 });
+
 const Intervention = mongoose.model('Intervention', interventionSchema);
 
 module.exports = Intervention;

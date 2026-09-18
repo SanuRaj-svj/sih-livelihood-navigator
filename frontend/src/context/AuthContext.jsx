@@ -33,7 +33,10 @@ export const AuthProvider = ({ children }) => {
           }
         } catch (err) {
           console.error('Failed to restore auth session:', err);
-          logout();
+          setToken(null);
+          setUser(null);
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
         }
       }
       setLoading(false);
@@ -41,7 +44,16 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, [token]);
 
-  const login = async (emailOrPhone, password) => {
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setToken(null);
+      setUser(null);
+    };
+    window.addEventListener('auth:expired', handleAuthExpired);
+    return () => window.removeEventListener('auth:expired', handleAuthExpired);
+  }, []);
+
+  async function login(emailOrPhone, password) {
     const res = await client.post('/auth/login', { emailOrPhone, password });
     if (res.data.success) {
       const { token: newToken, ...userObj } = res.data.data;
@@ -52,9 +64,9 @@ export const AuthProvider = ({ children }) => {
       return userObj;
     }
     throw new Error(res.data.message || 'Login failed');
-  };
+  }
 
-  const register = async (name, email, phone, password) => {
+  async function register(name, email, phone, password) {
     const res = await client.post('/auth/register', { name, email, phone, password });
     if (res.data.success) {
       const { token: newToken, ...userObj } = res.data.data;
@@ -65,14 +77,14 @@ export const AuthProvider = ({ children }) => {
       return userObj;
     }
     throw new Error(res.data.message || 'Registration failed');
-  };
+  }
 
-  const logout = () => {
+  function logout() {
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-  };
+  }
 
   return (
     <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>

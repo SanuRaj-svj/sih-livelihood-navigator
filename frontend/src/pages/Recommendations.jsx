@@ -5,7 +5,7 @@ import AnimatedCounter from '../components/AnimatedCounter';
 import client from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import { CardSkeleton } from '../components/SkeletonLoader';
-import { Sparkles, BookOpen, Building2, Briefcase, CheckCircle2, ArrowRight, MapPin, Award, Layers, X, Phone, Users, ShieldCheck, Info } from 'lucide-react';
+import { Sparkles, BookOpen, Building2, Briefcase, CheckCircle2, ArrowRight, MapPin, Award, Layers, X, Phone, Users, ShieldCheck, Info, RefreshCw } from 'lucide-react';
 import { MatchMascot, EmptyStateMascot } from '../components/Mascots';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
@@ -28,6 +28,7 @@ const Recommendations = () => {
 
   const [loading, setLoading] = useState(true);
   const [recommendations, setRecommendations] = useState([]);
+  const [loadError, setLoadError] = useState('');
   const [centers, setCenters] = useState([]);
   const [enrollmentCenters, setEnrollmentCenters] = useState([]);
   const [filter, setFilter] = useState('ALL');
@@ -44,37 +45,40 @@ const Recommendations = () => {
     fetchRecommendationsAndCenters();
   }, []);
 
-  const fetchRecommendationsAndCenters = async () => {
+  async function fetchRecommendationsAndCenters() {
     try {
       setLoading(true);
-      const [recRes, centerRes] = await Promise.all([
-        client.get('/recommendations').catch((err) => err.response || { data: { success: false } }),
-        client.get('/centres').catch((err) => err.response || { data: { success: false, data: [] } }),
+      setLoadError('');
+      const [recResult, centerResult] = await Promise.allSettled([
+        client.get('/recommendations'),
+        client.get('/centres'),
       ]);
 
-      if (recRes?.data?.success) {
-        const recList = recRes.data.data?.recommendations || recRes.data.data || [];
+      if (recResult.status === 'fulfilled' && recResult.value?.data?.success) {
+        const recList = recResult.value.data.data?.recommendations || recResult.value.data.data || [];
         setRecommendations(Array.isArray(recList) ? recList : []);
       } else {
         setRecommendations([]);
-        if (recRes?.status === 404) {
+        const status = recResult.status === 'fulfilled' ? recResult.value?.status : recResult.reason?.response?.status;
+        if (status === 404) {
           toast.error('Please complete your profile first');
           navigate('/profile');
           return;
         }
+        setLoadError(t('recommendationsUnavailable'));
       }
 
-      if (centerRes?.data?.success) {
-        setCenters(Array.isArray(centerRes.data.data) ? centerRes.data.data : []);
+      if (centerResult.status === 'fulfilled' && centerResult.value?.data?.success) {
+        setCenters(Array.isArray(centerResult.value.data.data) ? centerResult.value.data.data : []);
       }
     } catch (err) {
       console.error('Failed to fetch recommendations:', err);
-      toast.error('Failed to load recommendations');
+      setLoadError(t('recommendationsUnavailable'));
       setRecommendations([]);
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   const handleOpenEnrollModal = (item) => {
     setSelectedCourse(item);
@@ -92,10 +96,15 @@ const Recommendations = () => {
       return;
     }
 
+    if (!selectedCourse.details?.courseId) {
+      toast.error('This recommendation is not linked to an enrollable course yet');
+      return;
+    }
+
     setEnrolling(true);
     try {
       const res = await client.post('/enrollments', {
-        courseId: selectedCourse.id,
+        courseId: selectedCourse.details?.courseId || selectedCourse.id,
         centerId: selectedCenterId,
       });
 
@@ -116,10 +125,23 @@ const Recommendations = () => {
     }
   };
 
-  const filteredRecs = recommendations.filter((r) => {
-    if (filter === 'ALL') return true;
-    return r.type === filter;
-  });
+  const filteredRecs = filter === 'CENTER'
+    ? recommendations.flatMap((recommendation) => (recommendation.details?.trainingCenters || []).map((center) => ({
+      ...recommendation,
+      id: `${recommendation.id}-${center._id}`,
+      type: 'CENTER',
+      details: {
+        ...center,
+        courseName: recommendation.details?.courseName,
+        courseId: recommendation.details?.courseId,
+        sector: recommendation.details?.sector,
+      },
+      reasons: [
+        `Recommended for ${recommendation.details?.courseName || 'your selected pathway'}`,
+        ...(recommendation.reasons || []),
+      ],
+    })))
+    : recommendations.filter((recommendation) => filter === 'ALL' || recommendation.type === filter);
 
   const getTypeBadge = (type) => {
     switch (type) {
@@ -203,6 +225,15 @@ const Recommendations = () => {
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <CardSkeleton key={i} />
           ))}
+        </div>
+      ) : loadError ? (
+        <div className="text-center py-16 bg-[var(--color-surface)] rounded-3xl border border-[var(--color-border)] shadow-md flex flex-col items-center justify-center">
+          <Info className="w-12 h-12 text-[var(--color-accent-primary)] mb-3" />
+          <h3 className="text-xl font-black text-[var(--color-text-primary)]">{t('unableToLoadRecommendations')}</h3>
+          <p className="text-sm text-[var(--color-text-secondary)] font-medium max-w-md mx-auto mt-2">{loadError}</p>
+          <button type="button" onClick={fetchRecommendationsAndCenters} className="mt-5 px-4 py-2.5 rounded-xl btn-accent font-extrabold text-sm flex items-center gap-2">
+            <RefreshCw className="w-4 h-4" /> {t('retry')}
+          </button>
         </div>
       ) : filteredRecs.length === 0 ? (
         <div className="text-center py-16 bg-[var(--color-surface)] rounded-3xl border border-[var(--color-border)] shadow-md flex flex-col items-center justify-center">

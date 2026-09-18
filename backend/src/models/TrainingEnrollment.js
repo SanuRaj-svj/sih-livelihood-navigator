@@ -26,10 +26,22 @@ const trainingEnrollmentSchema = new mongoose.Schema(
       enum: ['ENROLLED', 'IN_PROGRESS', 'COMPLETED', 'DROPPED_OUT'],
       default: 'ENROLLED',
     },
+    enrollmentCertificateId: { type: String, trim: true, default: null },
+    enrollmentCertificateVerifiedAt: { type: Date, default: null },
+    completionCertificateId: { type: String, trim: true, default: null },
   },
   {
     timestamps: true,
   }
+);
+
+trainingEnrollmentSchema.index({ beneficiaryId: 1, status: 1 });
+trainingEnrollmentSchema.index(
+  { beneficiaryId: 1, courseId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: { $in: ['ENROLLED', 'IN_PROGRESS'] } },
+  },
 );
 
 const TrainingEnrollment = mongoose.model('TrainingEnrollment', trainingEnrollmentSchema);

@@ -3,6 +3,7 @@ const { body } = require('express-validator');
 const { register, registerOfficer, login, getMe } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 const { requireRole } = require('../middleware/roleMiddleware');
+const rateLimit = require('express-rate-limit');
 
 const router = express.Router();
 
@@ -21,14 +22,22 @@ const loginValidation = [
   body('password').notEmpty().withMessage('Password is required'),
 ];
 
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many authentication attempts. Try again later.' },
+});
+
 // Public registration (forced BENEFICIARY role)
-router.post('/register', registerValidation, register);
+router.post('/register', authRateLimit, registerValidation, register);
 
 // Admin-only creation of OFFICER or ADMIN accounts
 router.post('/register-officer', protect, requireRole('ADMIN'), registerValidation, registerOfficer);
 
 // Login and Profile
-router.post('/login', loginValidation, login);
+router.post('/login', authRateLimit, loginValidation, login);
 router.get('/me', protect, getMe);
 
 module.exports = router;

@@ -1,6 +1,47 @@
+## Operational health
+
+The Node API exposes `GET /api/health`. It reports the API, MongoDB, and Python AI service states. A `200` response means the Node API and MongoDB are ready; `503` means the API is running but a required dependency is unavailable.
+
+The frontend origin is configured with the backend `CORS_ORIGINS` environment variable as a comma-separated list. Production also requires `JWT_SECRET`.
+
 # API Specification (V1)
 
 Base URL: `http://127.0.0.1:8000/v1`
+
+## RAG and Vector Search Setup
+
+The AI service uses MongoDB Atlas Vector Search for persistent knowledge chunks. Configure `MONGODB_URI`, `GEMINI_API_KEY`, `VECTOR_DB_NAME`, `VECTOR_COLLECTION`, and `VECTOR_INDEX_NAME` in the Python service environment.
+
+Create an Atlas vector search index on the `knowledge_chunks` collection with this definition:
+
+```json
+{
+  "fields": [
+    {
+      "type": "vector",
+      "path": "embedding",
+      "numDimensions": 768,
+      "similarity": "cosine"
+    }
+  ]
+}
+```
+
+After the index is ready, populate it with:
+
+```bash
+python scripts/index_knowledge.py
+```
+
+The indexer includes the Python seed records plus MongoDB reference collections for
+NSQF courses, training centres, and government schemes. User accounts, beneficiary
+profiles, enrollments, and other transactional records are not indexed.
+
+The grounded question endpoint is `POST /v1/knowledge/ask`. Send the user's language
+code with the question so retrieved English sources can be answered in Hindi or another
+supported language. It returns the answer, source chunk IDs, similarity scores, and metadata. If no chunks are retrieved, the response marks `grounded` as `false`.
+
+RAG exchanges are persisted in MongoDB collection `rag_conversations`. Pass an optional `conversation_id` to continue a conversation, plus `user_id` or `session_id` for correlation. Read a conversation with `GET /v1/knowledge/history/{conversation_id}`. Knowledge chunks remain in `knowledge_chunks`; conversation history is stored separately.
 
 ---
 

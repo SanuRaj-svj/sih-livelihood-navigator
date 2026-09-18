@@ -2,6 +2,11 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET must be configured in production');
+}
+
 const env = {
   PORT: process.env.PORT || 5000,
   MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/livelihood_navigator',
@@ -14,6 +19,9 @@ const env = {
   EMAIL_USER: process.env.EMAIL_USER || '',
   EMAIL_APP_PASSWORD: process.env.EMAIL_APP_PASSWORD || '',
   EMAIL_RECIPIENT: process.env.EMAIL_RECIPIENT || '',
+  CORS_ORIGINS: (process.env.CORS_ORIGINS || 'http://localhost:5173').split(',').map((origin) => origin.trim()).filter(Boolean),
+  AI_SERVICE_HEALTH_TIMEOUT_MS: Number(process.env.AI_SERVICE_HEALTH_TIMEOUT_MS || 2000),
+  SKILL_INDIA_CENTER_SYNC_INTERVAL_MS: Number(process.env.SKILL_INDIA_CENTER_SYNC_INTERVAL_MS || 24 * 60 * 60 * 1000),
 };
 
 module.exports = env;

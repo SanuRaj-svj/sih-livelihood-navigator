@@ -169,6 +169,32 @@ class RecommendationService(BaseRecommendationService):
                 skills.add(result.canonical_skill_id)
         return skills
 
+    def _profile_skill_terms(self, profile: BeneficiaryProfile) -> set[str]:
+        terms = {self._key(skill.name) for skill in profile.normalized_skills}
+        for raw_skill in profile.traditional_skills:
+            normalized = self._key(raw_skill)
+            if normalized:
+                terms.add(normalized)
+        return terms
+
+    def _required_skill_terms(self, candidate: RecommendationCandidate) -> dict[str, set[str]]:
+        terms: dict[str, set[str]] = {}
+        for skill_id in self._required_skills(candidate):
+            skill = self._skills.get_by_id(skill_id)
+            if skill:
+                terms[skill_id] = {self._key(skill.name), *(self._key(alias) for alias in skill.aliases)}
+        return terms
+
+    @staticmethod
+    def _terms_match(profile_term: str, required_terms: set[str]) -> bool:
+        return any(
+            profile_term == required_term
+            or profile_term in required_term
+            or required_term in profile_term
+            for required_term in required_terms
+            if required_term
+        )
+
     @staticmethod
     def _required_skills(candidate: RecommendationCandidate) -> set[str]:
         skills = set(candidate.occupation.required_skills)
@@ -224,7 +250,15 @@ class RecommendationService(BaseRecommendationService):
         profile = request.profile
         eligibility = self._course_eligibility(profile, candidate.course, request.eligibility_result)
         known, required = self._profile_skill_ids(profile), self._required_skills(candidate)
-        matched, missing = sorted(known & required), sorted(required - known)
+        profile_terms = self._profile_skill_terms(profile)
+        required_terms = self._required_skill_terms(candidate)
+        matched_ids = known & required
+        matched_ids.update(
+            skill_id
+            for skill_id, terms in required_terms.items()
+            if any(self._terms_match(profile_term, terms) for profile_term in profile_terms)
+        )
+        matched, missing = sorted(matched_ids), sorted(required - matched_ids)
         skill_score = len(matched) / len(required) if required else 0.0
         interest, local = self._interest_score(profile, candidate), self._local_opportunity_score(profile, candidate.opportunities)
         demand, preference, eligibility_score = self._labour_demand_score(candidate), self._preference_score(profile, candidate), self._eligibility_score(eligibility)

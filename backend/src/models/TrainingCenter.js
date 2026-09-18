@@ -43,6 +43,7 @@ const trainingCenterSchema = new mongoose.Schema(
 );
 
 trainingCenterSchema.index({ location: '2dsphere' });
+trainingCenterSchema.index({ coursesOffered: 1 });
 
 const TrainingCenter = mongoose.model('TrainingCenter', trainingCenterSchema);
 

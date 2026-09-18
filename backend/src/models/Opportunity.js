@@ -39,6 +39,7 @@ const opportunitySchema = new mongoose.Schema(
 );
 
 opportunitySchema.index({ location: '2dsphere' });
+opportunitySchema.index({ sector: 1 });
 
 const Opportunity = mongoose.model('Opportunity', opportunitySchema);
 
