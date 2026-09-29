@@ -1,9 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { ArrowRight, CheckCircle2, MapPinned, Sparkles, TrendingUp, Users, ShieldCheck, Compass, Mail, ExternalLink } from 'lucide-react';
+import { ArrowRight, CheckCircle2, MapPinned, Sparkles, TrendingUp, Users, Compass, Mail, ExternalLink } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import client from '../api/client';
+import { getGovernmentSchemeLabels, getLocalizedGovernmentScheme } from '../data/governmentSchemeTranslations';
 import modiImage from '../assets/Prime-Minister-Narendra-Modi.png';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -35,13 +37,29 @@ const aboutPointKeys = ['landingAboutPointOne', 'landingAboutPointTwo', 'landing
 
 export default function LandingPage() {
   const rootRef = useRef(null);
-  const cursorRef = useRef(null);
   const { language, t } = useLanguage();
+  const heroVisualRef = useRef(null);
+  const heroCursorRef = useRef(null);
+  const [governmentSchemes, setGovernmentSchemes] = useState([]);
+  const schemeLabels = getGovernmentSchemeLabels(language);
 
   useEffect(() => {
-    let removeCursorListeners = () => {};
+    let isCurrent = true;
+    client.get('/schemes')
+      .then((response) => {
+        if (isCurrent && response.data?.success && Array.isArray(response.data.data)) {
+          setGovernmentSchemes(response.data.data);
+        }
+      })
+      .catch(() => {});
+
+    return () => { isCurrent = false; };
+  }, []);
+
+  useEffect(() => {
+    let removeHeroPointerListeners = () => {};
     const ctx = gsap.context(() => {
-      gsap.from('.hero-copy, .hero-panel', {
+      gsap.from('.hero-copy, .hero-service-panel', {
         y: 28,
         opacity: 0,
         duration: 0.9,
@@ -146,56 +164,60 @@ export default function LandingPage() {
         );
       }
 
-      const cursor = cursorRef.current;
-      const pointerQuery = window.matchMedia('(pointer: fine)');
-      if (cursor && pointerQuery.matches) {
-        const moveX = gsap.quickTo(cursor, 'x', { duration: 0.22, ease: 'power3.out' });
-        const moveY = gsap.quickTo(cursor, 'y', { duration: 0.22, ease: 'power3.out' });
+      const heroSection = rootRef.current.querySelector('.hero-section');
+      const heroVisual = heroVisualRef.current;
+      const heroCursor = heroCursorRef.current;
+      const supportsHover = window.matchMedia('(pointer: fine)').matches;
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      if (heroSection && heroVisual && heroCursor && supportsHover && !prefersReducedMotion) {
+        const moveX = gsap.quickTo(heroVisual, 'x', { duration: 0.7, ease: 'power3.out' });
+        const moveY = gsap.quickTo(heroVisual, 'y', { duration: 0.7, ease: 'power3.out' });
+        const cursorX = gsap.quickTo(heroCursor, 'x', { duration: 0.16, ease: 'power3.out' });
+        const cursorY = gsap.quickTo(heroCursor, 'y', { duration: 0.16, ease: 'power3.out' });
+        gsap.set(heroCursor, { xPercent: -50, yPercent: -50, scale: 0.7, autoAlpha: 0 });
+        const handlePointerEnter = () => {
+          gsap.to(heroVisual, { scale: 1.055, duration: 0.8, ease: 'power3.out', overwrite: 'auto' });
+          gsap.to(heroCursor, { scale: 1, autoAlpha: 1, duration: 0.2, ease: 'power2.out', overwrite: 'auto' });
+        };
         const handlePointerMove = (event) => {
-          moveX(event.clientX);
-          moveY(event.clientY);
-          cursor.classList.add('is-visible');
+          const bounds = heroSection.getBoundingClientRect();
+          const relativeX = (event.clientX - bounds.left) / bounds.width - 0.5;
+          const relativeY = (event.clientY - bounds.top) / bounds.height - 0.5;
+          cursorX(event.clientX - bounds.left);
+          cursorY(event.clientY - bounds.top);
+          moveX(-relativeX * 18);
+          moveY(-relativeY * 12);
         };
-        const handlePointerOver = (event) => {
-          if (event.target.closest('a, button, .feature-card, .skill-india-card, img')) {
-            gsap.to(cursor, { scale: 2.1, duration: 0.25, ease: 'power2.out' });
-            cursor.classList.add('is-hovering');
-          }
+        const handlePointerLeave = () => {
+          gsap.to(heroVisual, { scale: 1, x: 0, y: 0, duration: 0.85, ease: 'power3.out', overwrite: 'auto' });
+          gsap.to(heroCursor, { scale: 0.7, autoAlpha: 0, duration: 0.18, ease: 'power2.out', overwrite: 'auto' });
         };
-        const handlePointerOut = (event) => {
-          if (event.target.closest('a, button, .feature-card, .skill-india-card, img')) {
-            gsap.to(cursor, { scale: 1, duration: 0.25, ease: 'power2.out' });
-            cursor.classList.remove('is-hovering');
-          }
-        };
-        const handlePointerLeave = () => cursor.classList.remove('is-visible');
 
-        window.addEventListener('pointermove', handlePointerMove);
-        window.addEventListener('pointerover', handlePointerOver);
-        window.addEventListener('pointerout', handlePointerOut);
-        document.documentElement.addEventListener('mouseleave', handlePointerLeave);
-
-        removeCursorListeners = () => {
-          window.removeEventListener('pointermove', handlePointerMove);
-          window.removeEventListener('pointerover', handlePointerOver);
-          window.removeEventListener('pointerout', handlePointerOut);
-          document.documentElement.removeEventListener('mouseleave', handlePointerLeave);
+        heroSection.addEventListener('pointerenter', handlePointerEnter);
+        heroSection.addEventListener('pointermove', handlePointerMove);
+        heroSection.addEventListener('pointerleave', handlePointerLeave);
+        removeHeroPointerListeners = () => {
+          heroSection.removeEventListener('pointerenter', handlePointerEnter);
+          heroSection.removeEventListener('pointermove', handlePointerMove);
+          heroSection.removeEventListener('pointerleave', handlePointerLeave);
         };
       }
 
     }, rootRef);
 
     return () => {
-      removeCursorListeners();
+      removeHeroPointerListeners();
       ctx.revert();
     };
   }, [language]);
 
   return (
     <div key={language} ref={rootRef} className="landing-page-shell">
-      <span ref={cursorRef} className="landing-cursor" aria-hidden="true" />
       <section className="hero-section">
+        <div ref={heroVisualRef} className="hero-visual-layer" aria-hidden="true" />
         <div className="hero-overlay" />
+        <span ref={heroCursorRef} className="hero-cursor" aria-hidden="true" />
 
         <div className="hero-content container">
           <div className="hero-copy landing-animate">
@@ -208,9 +230,10 @@ export default function LandingPage() {
                 {t('landingSignUp')}
                 <ArrowRight size={18} />
               </Link>
-              <Link to="/login" className="btn btn-secondary">
-                {t('logIn')}
-              </Link>
+              <a href="#government-schemes" className="btn btn-secondary">
+                {schemeLabels[5]}
+                <ArrowRight size={18} />
+              </a>
             </div>
 
             <div className="mini-trust">
@@ -220,59 +243,85 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="hero-panel landing-animate">
-            <div className="panel-card panel-top">
-              <div className="panel-header">
-                <span className="dot green" />
-                <span className="dot orange" />
-                <span className="dot amber" />
-              </div>
-              <div className="panel-body">
-                <div className="goal-label">{t('landingRecommendedStep')}</div>
-                <h3>{t('landingExampleRole')}</h3>
-                <div className="chip-row">
-                  <span>{t('landingMatchedSkills')}</span>
-                  <span>{t('landingLocalTraining')}</span>
-                </div>
+          <div className="hero-service-panel landing-animate" aria-labelledby="hero-services-title">
+            <div className="hero-service-heading">
+              <div>
+                <span className="mini-label">{t('landingTrustLocal')}</span>
+                <h2 id="hero-services-title">{t('landingWhyTitle')}</h2>
               </div>
             </div>
 
-            <div className="floating-card card-one">
-              <ShieldCheck size={20} />
-              <div>
-                <strong>{t('landingCareerConfidence')}</strong>
-                <small>{t('landingPathwayTracked')}</small>
-              </div>
-            </div>
-
-            <div className="floating-card card-two">
-              <TrendingUp size={20} />
-              <div>
-                <strong>{t('landingOpportunityMatch')}</strong>
-                <small>{t('landingRelevantOpportunities')}</small>
-              </div>
+            <div className="hero-service-list">
+              <Link to="/register" className="hero-service-link">
+                <span className="service-number">01</span>
+                <span className="service-link-copy">
+                  <strong>{t('landingFeatureAiTitle')}</strong>
+                  <small>{t('landingFeatureAiDescription')}</small>
+                </span>
+                <ArrowRight size={18} />
+              </Link>
+              <a href="#government-schemes" className="hero-service-link">
+                <span className="service-number">02</span>
+                <span className="service-link-copy">
+                  <strong>{t('landingFeatureLocalTitle')}</strong>
+                  <small>{t('landingFeatureLocalDescription')}</small>
+                </span>
+                <ArrowRight size={18} />
+              </a>
+              <Link to="/login" className="hero-service-link">
+                <span className="service-number">03</span>
+                <span className="service-link-copy">
+                  <strong>{t('landingFeatureRoadmapTitle')}</strong>
+                  <small>{t('landingFeatureRoadmapDescription')}</small>
+                </span>
+                <ArrowRight size={18} />
+              </Link>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="skill-india-card container">
-        <div className="skill-india-image-wrap">
-          <img
-            className="skill-india-image"
-            src={modiImage}
-            alt={t('landingSkillIndiaImageAlt')}
-            loading="lazy"
-          />
-        </div>
-        <div className="skill-india-copy">
-          <span className="mini-label">{t('landingSkillIndiaLabel')}</span>
-          <h2>{t('landingSkillIndiaTitle')}</h2>
-          <blockquote>{t('landingSkillIndiaQuote')}</blockquote>
-          <p>{t('landingSkillIndiaDescription')}</p>
-          <cite>{t('landingSkillIndiaAttribution')}</cite>
-        </div>
-      </section>
+      {governmentSchemes.length > 0 && (
+        <section id="government-schemes" className="government-schemes-section" aria-labelledby="government-schemes-title">
+          <div className="container government-schemes-heading">
+            <div>
+              <span className="mini-label">{schemeLabels[0]}</span>
+              <h2 id="government-schemes-title">{schemeLabels[1]}</h2>
+              <p>{schemeLabels[2]}</p>
+            </div>
+            <span className="scheme-count">{governmentSchemes.length} {schemeLabels[3]}</span>
+          </div>
+
+          <div className="scheme-marquee" aria-label="Government schemes">
+            <div className="scheme-track">
+              {[false, true].map((isDuplicate) => (
+                <div className="scheme-group" key={isDuplicate ? 'duplicate' : 'schemes'} aria-hidden={isDuplicate}>
+                  {governmentSchemes.map((scheme) => (
+                    (() => {
+                      const localizedScheme = getLocalizedGovernmentScheme(scheme, language);
+                      return (
+                        <a
+                          className="scheme-ticker-card"
+                          key={`${isDuplicate ? 'duplicate-' : ''}${scheme._id || scheme.schemeCode}`}
+                          href={scheme.applicationUrl || scheme.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          tabIndex={isDuplicate ? -1 : undefined}
+                        >
+                          <span className="scheme-ticker-ministry">{scheme.ministry || scheme.sectors?.[0] || 'Government programme'}</span>
+                          <strong>{localizedScheme.name}</strong>
+                          <span className="scheme-ticker-description">{localizedScheme.description}</span>
+                          <span className="scheme-ticker-link">{schemeLabels[4]} <ExternalLink size={14} /></span>
+                        </a>
+                      );
+                    })()
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section id="about" className="about-section container" aria-labelledby="about-title">
         <div className="about-copy landing-animate">
@@ -301,6 +350,24 @@ export default function LandingPage() {
             <h3>{t('landingLearningToEarning')}</h3>
             <p>{t('landingSupportDescription')}</p>
           </div>
+        </div>
+      </section>
+
+      <section className="skill-india-card container">
+        <div className="skill-india-image-wrap">
+          <img
+            className="skill-india-image"
+            src={modiImage}
+            alt={t('landingSkillIndiaImageAlt')}
+            loading="lazy"
+          />
+        </div>
+        <div className="skill-india-copy">
+          <span className="mini-label">{t('landingSkillIndiaLabel')}</span>
+          <h2>{t('landingSkillIndiaTitle')}</h2>
+          <blockquote>{t('landingSkillIndiaQuote')}</blockquote>
+          <p>{t('landingSkillIndiaDescription')}</p>
+          <cite>{t('landingSkillIndiaAttribution')}</cite>
         </div>
       </section>
 

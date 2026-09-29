@@ -67,7 +67,7 @@ const Navbar = () => {
           <motion.div
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-colors ${
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-extrabold transition-colors ${
               location.pathname === '/ivr-demo'
                 ? 'border border-[var(--color-accent-primary)] bg-[var(--color-bg)] text-[var(--color-accent-primary)]'
                 : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg)] hover:text-[var(--color-text-primary)]'
@@ -87,7 +87,7 @@ const Navbar = () => {
                   <motion.div
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors relative ${
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-extrabold transition-colors relative ${
                       isActive
                         ? 'text-[var(--color-accent-primary)] bg-[var(--color-bg)] border border-[var(--color-accent-primary)]'
                         : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg)]'
@@ -122,7 +122,7 @@ const Navbar = () => {
                 const selectedLang = LANGUAGES.find(l => l.code === e.target.value);
                 toast.success(`Language set to ${selectedLang?.native || selectedLang?.name}`);
               }}
-              className="bg-transparent text-[10px] sm:text-xs font-bold text-[var(--color-text-primary)] outline-none cursor-pointer pr-1 max-w-[96px] sm:max-w-[120px]"
+              className="bg-transparent text-[10px] sm:text-xs font-extrabold text-[var(--color-text-primary)] outline-none cursor-pointer pr-1 max-w-[96px] sm:max-w-[120px]"
             >
               {LANGUAGES.map((lang) => (
                 <option key={lang.code} value={lang.code} className="bg-[var(--color-surface)] text-[var(--color-text-primary)]">
@@ -161,7 +161,7 @@ const Navbar = () => {
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg)] transition-colors"
+                  className="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg)] transition-colors"
                 >
                   {t('logIn')}
                 </motion.button>
