@@ -1,9 +1,11 @@
 const BeneficiaryProfile = require('../models/BeneficiaryProfile');
+const { missingProfileFields } = require('./beneficiaryController');
 const TrainingCenter = require('../models/TrainingCenter');
 const NSQFCourse = require('../models/NSQFCourse');
 const mongoose = require('mongoose');
 const recommendationService = require('../services/recommendation/recommendationService');
 const { assessLivelihood } = require('../services/ai/livelihoodAssessmentClient');
+const { persistWorkflowSnapshot } = require('../services/livelihoodWorkflowService');
 
 const normalizedText = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
@@ -77,6 +79,35 @@ const normalizeRecommendationResult = (result, source) => ({
   fallbackReason: result.fallbackReason || null,
   source,
 });
+
+const mergeRecommendationSets = (primaryRecommendations = [], fallbackRecommendations = []) => {
+  const deduplicated = new Map();
+
+  const addRecommendation = (recommendation) => {
+    if (!recommendation || !recommendation.type) return;
+
+    const candidateKey = String(
+      recommendation.details?.courseId
+      || recommendation.details?.courseName
+      || recommendation.details?.title
+      || recommendation.details?.name
+      || recommendation.id
+      || recommendation.type
+    );
+
+    const uniqueKey = `${recommendation.type}:${candidateKey}`.toLowerCase();
+    if (!deduplicated.has(uniqueKey)) {
+      deduplicated.set(uniqueKey, {
+        ...recommendation,
+        score: Number(recommendation.score ?? 0),
+      });
+    }
+  };
+
+  [...primaryRecommendations, ...fallbackRecommendations].forEach(addRecommendation);
+
+  return [...deduplicated.values()].sort((left, right) => (right.score || 0) - (left.score || 0)).slice(0, 12);
+};
 
 const attachTrainingCenters = async (result) => {
   const courseIds = result.recommendations
@@ -153,20 +184,29 @@ const getRecommendationsForCurrentUser = async (req, res, next) => {
       });
     }
 
+    const missingFields = missingProfileFields(profile);
+    if (missingFields.length > 0 || !(Number(profile.profileCompletion) >= 100)) {
+      return res.status(409).json({
+        success: false,
+        code: 'PROFILE_INCOMPLETE',
+        message: 'Complete your beneficiary profile before requesting recommendations.',
+        missingFields,
+      });
+    }
+
     let result;
     let source = 'ai-assessment';
 
     try {
       result = await assessLivelihood(profile);
       const liveCourses = await liveCourseRecommendations(profile);
+      const fallbackResult = await recommendationService.getRecommendations(profile);
       result = {
         ...result,
-        recommendations: [...liveCourses, ...(result.recommendations || [])]
-          .filter((recommendation, index, all) => all.findIndex((item) => (
-            String(item.details?.courseId || item.details?.courseName || item.id)
-            === String(recommendation.details?.courseId || recommendation.details?.courseName || recommendation.id)
-          )) === index)
-          .slice(0, 3),
+        recommendations: mergeRecommendationSets(
+          [...liveCourses, ...(result.recommendations || [])],
+          fallbackResult.recommendations || [],
+        ),
       };
       result = await attachTrainingCenters(result);
     } catch (aiError) {
@@ -183,6 +223,12 @@ const getRecommendationsForCurrentUser = async (req, res, next) => {
       };
     }
 
+    try {
+      await persistWorkflowSnapshot({ profile, assessment: result, source: profile.source || 'FORM' });
+    } catch (workflowError) {
+      console.warn(`Livelihood twin could not be refreshed: ${workflowError.message}`);
+    }
+
     res.status(200).json({
       success: true,
       data: normalizeRecommendationResult(result, source),
@@ -194,4 +240,5 @@ const getRecommendationsForCurrentUser = async (req, res, next) => {
 
 module.exports = {
   getRecommendationsForCurrentUser,
+  mergeRecommendationSets,
 };

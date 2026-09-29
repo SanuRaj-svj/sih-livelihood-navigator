@@ -6,6 +6,9 @@ const {
   getOwnEnrollments,
   updateOwnProgress,
   getAllEnrollments,
+  markDroppedOut,
+  confirmTrainingCompletion,
+  createTrainingCheckIn,
 } = require('../controllers/enrollmentController');
 
 const router = express.Router();
@@ -16,6 +19,9 @@ router.use(protect);
 router.post('/', enrollSelf);
 router.get('/me', getOwnEnrollments);
 router.patch('/:id/progress', updateOwnProgress);
+router.post('/:id/check-ins', createTrainingCheckIn);
+router.patch('/:id/dropout', markDroppedOut);
+router.patch('/:id/complete', requireRole('OFFICER', 'ADMIN'), confirmTrainingCompletion);
 
 // Officer / Admin route
 router.get('/', requireRole('OFFICER', 'ADMIN'), getAllEnrollments);

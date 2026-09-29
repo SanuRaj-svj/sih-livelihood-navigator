@@ -1,9 +1,58 @@
 const TrainingEnrollment = require('../models/TrainingEnrollment');
+const TrainingCertificate = require('../models/TrainingCertificate');
 const TrainingProgress = require('../models/TrainingProgress');
 const BeneficiaryProfile = require('../models/BeneficiaryProfile');
 const NSQFCourse = require('../models/NSQFCourse');
 const TrainingCenter = require('../models/TrainingCenter');
 const Outcome = require('../models/Outcome');
+const Intervention = require('../models/Intervention');
+const { nextCheckInAt } = require('../services/trainingCheckInReminderService');
+
+const getCenterEligibilityError = ({ center, courseId, activeEnrollmentCount }) => {
+  const offeredCourseIds = (center.coursesOffered || []).map((id) => String(id._id || id));
+  if (offeredCourseIds.length && !offeredCourseIds.includes(String(courseId))) return 'Training Center does not offer this course';
+  if (center.capacity > 0 && activeEnrollmentCount >= center.capacity) return 'Training Center has reached its enrollment capacity';
+  return null;
+};
+
+const getDocumentGateError = (verificationStatus = 'NOT_SUBMITTED', identityMatchConfirmed = false) => {
+  if (verificationStatus === 'NOT_SUBMITTED') return 'Upload your SC certificate and wait for officer verification before enrolling';
+  if (verificationStatus === 'PENDING_REVIEW') return 'Source certificate is awaiting officer verification';
+  if (verificationStatus === 'REJECTED') return 'Source certificate was rejected; upload a valid document before enrolling';
+  if (verificationStatus === 'VERIFIED' && identityMatchConfirmed !== true) return 'Certificate identity must match the beneficiary profile before enrolling';
+  return null;
+};
+
+const validateCheckIn = ({ attendancePercentage, currentModule, notes }) => {
+  if (!Number.isFinite(attendancePercentage) || attendancePercentage < 0 || attendancePercentage > 100) {
+    return 'Attendance must be a number between 0 and 100';
+  }
+  if (String(currentModule || '').length > 160) return 'Module name must be 160 characters or fewer';
+  if (String(notes || '').length > 1000) return 'Check-in notes must be 1000 characters or fewer';
+  return null;
+};
+
+const recordProgressRisk = async ({ enrollment, progress, raisedBy }) => {
+  if (progress.attendancePercentage >= 50 || !enrollment.beneficiaryId) return null;
+
+  const sourceKey = `attendance:${enrollment._id}`;
+  return Intervention.findOneAndUpdate(
+    { sourceKey },
+    {
+      $setOnInsert: {
+        beneficiaryId: enrollment.beneficiaryId,
+        enrollmentId: enrollment._id,
+        raisedBy,
+        source: 'SYSTEM',
+        sourceKey,
+        reason: `Attendance dropped to ${progress.attendancePercentage}%; officer follow-up is recommended.`,
+        riskLevel: progress.attendancePercentage < 25 ? 'HIGH' : 'MEDIUM',
+        status: 'OPEN',
+      },
+    },
+    { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true },
+  );
+};
 
 // @desc    Beneficiary self-enrollment in a course and center
 // @route   POST /api/enrollments
@@ -27,6 +76,12 @@ const enrollSelf = async (req, res, next) => {
       });
     }
 
+    const documentGateError = getDocumentGateError(
+      profile.verification?.scCertificateStatus,
+      profile.verification?.scCertificateIdentityMatch,
+    );
+    if (documentGateError) return res.status(403).json({ success: false, message: documentGateError, code: 'SOURCE_DOCUMENT_REVIEW_REQUIRED' });
+
     const course = await NSQFCourse.findById(courseId);
     if (!course) {
       return res.status(404).json({ success: false, message: 'NSQF Course not found' });
@@ -36,6 +91,13 @@ const enrollSelf = async (req, res, next) => {
     if (!center) {
       return res.status(404).json({ success: false, message: 'Training Center not found' });
     }
+
+    const activeAtCenter = await TrainingEnrollment.countDocuments({
+      centerId,
+      status: { $in: ['ENROLLED', 'IN_PROGRESS'] },
+    });
+    const centerEligibilityError = getCenterEligibilityError({ center, courseId, activeEnrollmentCount: activeAtCenter });
+    if (centerEligibilityError) return res.status(409).json({ success: false, message: centerEligibilityError });
 
     // Check if already enrolled in this course
     const existing = await TrainingEnrollment.findOne({
@@ -111,6 +173,7 @@ const getOwnEnrollments = async (req, res, next) => {
     const enrollmentIds = enrollments.map((e) => e._id);
     const progressList = await TrainingProgress.find({ enrollmentId: { $in: enrollmentIds } });
     const outcomeList = await Outcome.find({ beneficiaryId: profile._id });
+    const certificates = await TrainingCertificate.find({ enrollmentId: { $in: enrollmentIds } }).select('enrollmentId stage certificateId issuedAt beneficiaryNotifiedAt notificationStatus');
 
     const progressMap = {};
     progressList.forEach((p) => {
@@ -124,11 +187,35 @@ const getOwnEnrollments = async (req, res, next) => {
       }
     });
 
-    const data = enrollments.map((e) => ({
-      ...e.toObject(),
-      progress: progressMap[e._id.toString()] || null,
-      outcome: outcomeMap[e._id.toString()] || null,
-    }));
+    const certificatesByEnrollment = {};
+    certificates.forEach((certificate) => {
+      const key = certificate.enrollmentId.toString();
+      certificatesByEnrollment[key] ||= {};
+      certificatesByEnrollment[key][certificate.stage] = certificate;
+    });
+
+    const data = enrollments.map((e) => {
+      const key = e._id.toString();
+      const enrollmentCertificate = certificatesByEnrollment[key]?.ENROLLMENT || null;
+      const completionCertificate = certificatesByEnrollment[key]?.COMPLETION || null;
+      return {
+        ...e.toObject(),
+        progress: progressMap[key] || null,
+        outcome: outcomeMap[key] || null,
+        certificateTimeline: {
+          enrollmentApproval: enrollmentCertificate ? 'APPROVED' : 'AWAITING_OFFICER_APPROVAL',
+          enrollmentCertificateId: enrollmentCertificate?.certificateId || null,
+          enrollmentIssuedAt: enrollmentCertificate?.issuedAt || null,
+          training: e.status === 'COMPLETED' ? 'COMPLETED' : e.status,
+          trainingCompletedAt: e.completedAt || null,
+          completionReview: completionCertificate ? 'APPROVED' : e.status === 'COMPLETED' ? 'AWAITING_OFFICER_REVIEW' : 'NOT_READY',
+          completionCertificateId: completionCertificate?.certificateId || null,
+          completionIssuedAt: completionCertificate?.issuedAt || null,
+          beneficiaryNotifiedAt: completionCertificate?.beneficiaryNotifiedAt || null,
+          notificationStatus: completionCertificate?.notificationStatus || 'NOT_SENT',
+        },
+      };
+    });
 
     res.status(200).json({
       success: true,
@@ -192,6 +279,9 @@ const updateOwnProgress = async (req, res, next) => {
       enrollment.status = 'IN_PROGRESS';
       await enrollment.save();
     }
+    if (typeof attendancePercentage === 'number') {
+      await recordProgressRisk({ enrollment, progress, raisedBy: req.user.role === 'BENEFICIARY' ? undefined : req.user._id });
+    }
 
     res.status(200).json({
       success: true,
@@ -202,6 +292,129 @@ const updateOwnProgress = async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+};
+
+const createTrainingCheckIn = async (req, res, next) => {
+  try {
+    const { attendancePercentage, currentModule = '', notes = '' } = req.body;
+    const validationError = validateCheckIn({ attendancePercentage, currentModule, notes });
+    if (validationError) return res.status(400).json({ success: false, message: validationError });
+
+    const [profile, enrollment] = await Promise.all([
+      BeneficiaryProfile.findOne({ userId: req.user._id }).select('_id'),
+      TrainingEnrollment.findById(req.params.id),
+    ]);
+    if (!enrollment) return res.status(404).json({ success: false, message: 'Training enrollment not found' });
+    if (!profile || String(enrollment.beneficiaryId) !== String(profile._id)) {
+      return res.status(403).json({ success: false, message: 'Not authorized to check in to this enrollment' });
+    }
+    if (!['ENROLLED', 'IN_PROGRESS'].includes(enrollment.status)) {
+      return res.status(409).json({ success: false, message: 'Check-ins are only available for active training' });
+    }
+    if (!enrollment.enrollmentCertificateVerifiedAt) {
+      return res.status(403).json({ success: false, code: 'ENROLLMENT_CERTIFICATE_REQUIRED', message: 'Verify your enrollment certificate before submitting a training check-in' });
+    }
+
+    const progress = await TrainingProgress.findOneAndUpdate(
+      { enrollmentId: enrollment._id },
+      {
+        $set: {
+          attendancePercentage,
+          currentModule: String(currentModule).trim(),
+          notes: String(notes).trim(),
+          lastUpdated: new Date(),
+        },
+        $push: {
+          checkIns: {
+            $each: [{
+              attendancePercentage,
+              currentModule: String(currentModule).trim(),
+              notes: String(notes).trim(),
+              submittedBy: req.user._id,
+              submittedAt: new Date(),
+            }],
+            $slice: -100,
+          },
+        },
+      },
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+    );
+
+    enrollment.nextCheckInAt = nextCheckInAt();
+    enrollment.lastCheckInReminderAt = null;
+    enrollment.lastCheckInReminderFor = null;
+
+    if (progress.attendancePercentage > 0 && enrollment.status === 'ENROLLED') {
+      enrollment.status = 'IN_PROGRESS';
+    }
+    await enrollment.save();
+    await recordProgressRisk({ enrollment, progress });
+    return res.status(201).json({ success: true, data: { progress, enrollment } });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const markDroppedOut = async (req, res, next) => {
+  try {
+    const enrollment = await TrainingEnrollment.findById(req.params.id);
+    if (!enrollment) return res.status(404).json({ success: false, message: 'Training enrollment not found' });
+
+    if (req.user.role === 'BENEFICIARY') {
+      const profile = await BeneficiaryProfile.findOne({ userId: req.user._id }).select('_id');
+      if (!profile || String(enrollment.beneficiaryId) !== String(profile._id)) {
+        return res.status(403).json({ success: false, message: 'Not authorized to update this enrollment' });
+      }
+    }
+    if (!['ENROLLED', 'IN_PROGRESS'].includes(enrollment.status)) {
+      return res.status(400).json({ success: false, message: 'Only active enrollments can be marked as dropped out' });
+    }
+
+    enrollment.status = 'DROPPED_OUT';
+    await enrollment.save();
+    const sourceKey = `dropout:${enrollment._id}`;
+    const intervention = await Intervention.findOneAndUpdate(
+      { sourceKey },
+      {
+        $setOnInsert: {
+          beneficiaryId: enrollment.beneficiaryId,
+          enrollmentId: enrollment._id,
+          raisedBy: req.user.role === 'BENEFICIARY' ? undefined : req.user._id,
+          source: 'SYSTEM',
+          sourceKey,
+          reason: String(req.body.reason || 'Training dropout reported; follow-up required.').trim(),
+          riskLevel: 'HIGH',
+          status: 'OPEN',
+        },
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true },
+    );
+    return res.status(200).json({ success: true, data: { enrollment, intervention } });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const confirmTrainingCompletion = async (req, res, next) => {
+  try {
+    if (req.body.completionConfirmed !== true) {
+      return res.status(400).json({ success: false, message: 'Officer must confirm training completion' });
+    }
+    const enrollment = await TrainingEnrollment.findById(req.params.id);
+    if (!enrollment) return res.status(404).json({ success: false, message: 'Training enrollment not found' });
+    if (enrollment.status !== 'IN_PROGRESS') {
+      return res.status(409).json({ success: false, message: 'Only in-progress training can be confirmed complete' });
+    }
+
+    enrollment.status = 'COMPLETED';
+    enrollment.completedAt = new Date();
+    enrollment.completionReviewedBy = req.user._id;
+    enrollment.completionNotes = String(req.body.notes || '').trim();
+    await enrollment.save();
+    return res.status(200).json({ success: true, data: enrollment, message: 'Training completion verified; completion certificate is ready for approval.' });
+  } catch (error) {
+    return next(error);
   }
 };
 
@@ -261,4 +474,10 @@ module.exports = {
   getOwnEnrollments,
   updateOwnProgress,
   getAllEnrollments,
+  markDroppedOut,
+  confirmTrainingCompletion,
+  getCenterEligibilityError,
+  getDocumentGateError,
+  validateCheckIn,
+  createTrainingCheckIn,
 };

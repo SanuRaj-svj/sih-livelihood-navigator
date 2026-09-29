@@ -5,6 +5,7 @@ const env = require('./config/env');
 const { syncSkillIndiaCenters } = require('./utils/seedSkillIndiaCenters');
 const { ensureGovernmentSchemes } = require('./utils/seedGovernmentSchemes');
 const TrainingCertificate = require('./models/TrainingCertificate');
+const { runScheduledCheckInReminders } = require('./services/trainingCheckInReminderService');
 
 const PORT = env.PORT;
 
@@ -34,9 +35,19 @@ const startServer = async () => {
   const centerSyncTimer = setInterval(syncCenters, env.SKILL_INDIA_CENTER_SYNC_INTERVAL_MS);
   centerSyncTimer.unref();
 
+  const checkInReminderJob = () => runScheduledCheckInReminders()
+    .then((summary) => {
+      if (summary.remindersSent || summary.escalationsCreated) console.log('Training check-in reminder cycle:', summary);
+    })
+    .catch((error) => console.error('Training check-in reminder cycle failed:', error.message));
+  checkInReminderJob();
+  const checkInReminderTimer = setInterval(checkInReminderJob, 6 * 60 * 60 * 1000);
+  checkInReminderTimer.unref();
+
   const shutdown = async (signal) => {
     console.log(`${signal} received. Closing HTTP and MongoDB connections...`);
     clearInterval(centerSyncTimer);
+    clearInterval(checkInReminderTimer);
     server.close(async () => {
       await mongoose.connection.close();
       process.exit(0);

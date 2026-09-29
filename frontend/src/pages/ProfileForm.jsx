@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useEffectEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import client from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { User, GraduationCap, MapPin, Briefcase, Mic, MicOff, CheckCircle, ArrowRight, ArrowLeft, Volume2, Globe } from 'lucide-react';
+import { User, GraduationCap, MapPin, Briefcase, CheckCircle, ArrowRight, ArrowLeft, Upload, ShieldCheck, LoaderCircle, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 /*
@@ -59,8 +60,12 @@ const PROFILE_ASSISTANT_PROMPTS = {
       district: { field: 'district', prompt: 'Which district are you from?', helper: 'Mention your district name.' },
       block: { field: 'block', prompt: 'Which block or village are you from?', helper: 'Tell us your block or village name.' },
       currentOccupation: { field: 'currentOccupation', prompt: 'What is your current occupation?', helper: 'Tell us your main work or job.' },
+      familyOccupation: { field: 'familyOccupation', prompt: 'What is your family\'s traditional or main occupation?', helper: 'This is optional; you can leave it blank.' },
       currentIncomeRange: { field: 'currentIncomeRange', prompt: 'What is your current household income range?', helper: 'Mention your approximate income range.' },
       skills: { field: 'skills', prompt: 'Which skills do you already have?', helper: 'List your skills, separated by commas.' },
+      traditionalSkills: { field: 'traditionalSkills', prompt: 'Do you have traditional or community skills?', helper: 'List any traditional skills, separated by commas, or leave blank.' },
+      interests: { field: 'interests', prompt: 'What kinds of work interest you?', helper: 'List your work interests, separated by commas.' },
+      aspirations: { field: 'aspirations', prompt: 'What work or livelihood do you hope to do?', helper: 'Describe your future work or livelihood goal.' },
       employmentPreference: { field: 'employmentPreference', prompt: 'What is your employment preference?', helper: 'Choose the type of work you prefer.' },
     },
   },
@@ -75,8 +80,12 @@ const PROFILE_ASSISTANT_PROMPTS = {
       district: { field: 'district', prompt: 'आप किस जिले से हैं?', helper: 'अपना जिला लिखें।' },
       block: { field: 'block', prompt: 'आपका ब्लॉक या गांव क्या है?', helper: 'अपने ब्लॉक या गांव का नाम बताएं।' },
       currentOccupation: { field: 'currentOccupation', prompt: 'आपका वर्तमान व्यवसाय क्या है?', helper: 'अपने मुख्य काम या नौकरी के बारे में बताएं।' },
+      familyOccupation: { field: 'familyOccupation', prompt: 'आपके परिवार का पारंपरिक या मुख्य काम क्या है?', helper: 'यह वैकल्पिक है; चाहें तो खाली छोड़ें।' },
       currentIncomeRange: { field: 'currentIncomeRange', prompt: 'आपके परिवार की वर्तमान आय का स्तर क्या है?', helper: 'अपनी अनुमानित आय श्रेणी बताएं।' },
       skills: { field: 'skills', prompt: 'आपके पास कौन-कौन से कौशल हैं?', helper: 'कौशल comma से अलग करके लिखें।' },
+      traditionalSkills: { field: 'traditionalSkills', prompt: 'क्या आपके पास पारंपरिक या सामुदायिक कौशल हैं?', helper: 'पारंपरिक कौशल comma से अलग लिखें या खाली छोड़ें।' },
+      interests: { field: 'interests', prompt: 'आप किस तरह के काम में रुचि रखते हैं?', helper: 'अपनी काम की रुचियाँ comma से अलग लिखें।' },
+      aspirations: { field: 'aspirations', prompt: 'आप भविष्य में कौन-सा काम या आजीविका करना चाहते हैं?', helper: 'अपने भविष्य के काम या आजीविका का लक्ष्य बताएं।' },
       employmentPreference: { field: 'employmentPreference', prompt: 'आपको किस प्रकार का रोजगार पसंद है?', helper: 'अपनी पसंदीदा रोजगार शैली चुनें।' },
     },
   },
@@ -133,51 +142,52 @@ const PROFILE_ASSISTANT_PROMPTS = {
 const PROFILE_ASSISTANT_FIELD_ORDER = {
   1: ['age', 'gender'],
   2: ['educationLevel', 'state', 'district', 'block'],
-  3: ['currentOccupation', 'currentIncomeRange'],
-  4: ['skills', 'employmentPreference'],
+  3: ['currentOccupation', 'familyOccupation', 'currentIncomeRange'],
+  4: ['skills', 'traditionalSkills', 'interests', 'aspirations', 'employmentPreference'],
 };
 
 const ProfileForm = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { t, language } = useLanguage();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
-  const [assistantAnswer, setAssistantAnswer] = useState('');
+  const [certificateStatus, setCertificateStatus] = useState('NOT_SUBMITTED');
+  const [certificateIdentityConfirmed, setCertificateIdentityConfirmed] = useState(false);
+  const [missingProfileFields, setMissingProfileFields] = useState([]);
+  const [correctionRequests, setCorrectionRequests] = useState([]);
+  const [certificateFile, setCertificateFile] = useState(null);
+  const [certificateBusy, setCertificateBusy] = useState(false);
+  const [certificateError, setCertificateError] = useState('');
+  const [assistantAnswer, setAssistantAnswer] = useState(null);
   const [assistantFieldIndex, setAssistantFieldIndex] = useState({ 1: 0, 2: 0, 3: 0, 4: 0 });
+  const [speechLang, setSpeechLang] = useState('hi-IN');
   const activeLanguagePrompts = PROFILE_ASSISTANT_PROMPTS[language] || PROFILE_ASSISTANT_PROMPTS.en;
   const currentFieldOrder = PROFILE_ASSISTANT_FIELD_ORDER[step] || ['age'];
   const currentFieldName = currentFieldOrder[assistantFieldIndex[step] ?? 0] || currentFieldOrder[0];
-  const assistantQuestion = activeLanguagePrompts.fieldPrompt[currentFieldName] || activeLanguagePrompts.fieldPrompt.age;
-
-  // Web Speech API state
-  const [isListening, setIsListening] = useState(false);
-  const [speechLang, setSpeechLang] = useState('hi-IN');
-  const [liveTranscript, setLiveTranscript] = useState('');
-  const [activeVoiceField, setActiveVoiceField] = useState('skills');
-  const recognitionRef = useRef(null);
-  const activeVoiceFieldRef = useRef('skills');
+  const assistantQuestion = activeLanguagePrompts.fieldPrompt[currentFieldName]
+    || PROFILE_ASSISTANT_PROMPTS.en.fieldPrompt[currentFieldName]
+    || activeLanguagePrompts.fieldPrompt.age;
 
   const [formData, setFormData] = useState({
-    personal: { age: '', gender: 'Male' },
-    education: { level: '10th Pass', field: 'General' },
-    location: { state: 'Madhya Pradesh', district: 'Bhopal', block: 'Fanda', village: 'Karond' },
-    livelihood: { currentOccupation: 'Weaver', familyOccupation: 'Agriculture', currentIncomeRange: '< 50000' },
-    skills: 'Weaving, Embroidery',
-    traditionalSkills: 'Handloom',
-    interests: 'Textiles, Tailoring',
-    aspirations: 'Small Business Owner',
-    employmentPreference: 'ANY',
+    personal: { age: '', gender: '' },
+    education: { level: '', field: '' },
+    location: { state: '', district: '', block: '', village: '' },
+    livelihood: { currentOccupation: '', familyOccupation: '', currentIncomeRange: '' },
+    skills: '',
+    traditionalSkills: '',
+    interests: '',
+    aspirations: '',
+    employmentPreference: '',
     preferredLanguage: 'Hindi',
     source: 'FORM',
   });
 
-  const currentDistricts = INDIAN_STATES_DISTRICTS[formData.location.state] || [
-    'Bhopal', 'Indore', 'Patna', 'Muzaffarpur', 'Varanasi', 'Lucknow', 'Jaipur', 'Jodhpur',
-  ];
+  const currentDistricts = INDIAN_STATES_DISTRICTS[formData.location.state] || [];
 
   const parseSpokenAge = (text) => {
-    const normalized = text.toLowerCase().replace(/[^\w\s]/g, ' ');
+    const normalized = text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ');
     const directMatch = normalized.match(/\b(\d{1,3})\b/);
     if (directMatch) return String(Number(directMatch[1]));
 
@@ -203,6 +213,7 @@ const ProfileForm = () => {
 
   const findMatchingState = (value) => {
     const normalized = value.toLowerCase().trim();
+    if (!normalized) return '';
     const stateKey = Object.keys(INDIAN_STATES_DISTRICTS).find((state) => {
       const stateNorm = state.toLowerCase();
       return stateNorm === normalized || stateNorm.includes(normalized) || normalized.includes(stateNorm);
@@ -213,6 +224,7 @@ const ProfileForm = () => {
   const findMatchingDistrict = (state, value) => {
     const stateDistricts = INDIAN_STATES_DISTRICTS[state] || [];
     const normalized = value.toLowerCase().trim();
+    if (!normalized) return '';
     const district = stateDistricts.find((district) => {
       const districtNorm = district.toLowerCase();
       return districtNorm === normalized || districtNorm.includes(normalized) || normalized.includes(districtNorm);
@@ -220,7 +232,39 @@ const ProfileForm = () => {
     return district || value;
   };
 
-  const normalizeText = (value) => value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const normalizeText = (value) => value.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+
+  const parseSkillList = (value) => {
+    const rawList = String(value || '')
+      .replace(/\b(i have|i am|i know|my skills are|skills are|i can do|i can|my skill is|my skills|skill is|skills|know|can)\b/gi, ' ')
+      .replace(/\b(and|plus|with|also|like|such as|for example|comma|commas)\b/gi, ',')
+      .replace(/\s*[,/;&]+\s*/g, ',')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => item.replace(/\b(a|an|the)\b/gi, '').trim())
+      .filter((item) => item.length > 2);
+
+    if (!rawList.length) return value;
+
+    const seen = new Set();
+    const cleaned = rawList
+      .map((item) => {
+        const normalized = item.replace(/\s+/g, ' ').trim();
+        const words = normalized.split(' ').filter(Boolean);
+        const titleCased = words
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        return titleCased;
+      })
+      .filter((item) => {
+        if (!item || seen.has(item.toLowerCase())) return false;
+        seen.add(item.toLowerCase());
+        return true;
+      });
+
+    return cleaned.join(', ');
+  };
 
   const parseNaturalAnswer = (field, rawValue) => {
     if (!rawValue) return '';
@@ -235,17 +279,19 @@ const ProfileForm = () => {
         const normalized = normalizeText(value);
         if (normalized.includes('female') || normalized.includes('woman') || normalized.includes('girl') || normalized.includes('महिला') || normalized.includes('स्त्री')) return 'Female';
         if (normalized.includes('male') || normalized.includes('man') || normalized.includes('boy') || normalized.includes('पुरुष') || normalized.includes('male')) return 'Male';
-        if (normalized.includes('other') || normalized.includes('non-binary') || normalized.includes('अन्य')) return 'Other';
+        if (normalized.includes('other') || normalized.includes('non binary') || normalized.includes('non-binary') || normalized.includes('अन्य')) return 'Other';
         return value;
       }
       case 'educationLevel': {
         const normalized = normalizeText(value);
-        if (normalized.includes('below 8') || normalized.includes('8th') || normalized.includes('below eighth') || normalized.includes('8 वीं') || normalized.includes('8th pass')) return 'Below 8th';
+        if (normalized.includes('post graduate') || normalized.includes('masters') || normalized.includes('postgraduate') || normalized.includes('स्नातकोत्तर')) return 'Post Graduate';
+        if (normalized.includes('iti')) return 'ITI';
+        if (normalized.includes('diploma')) return 'Diploma';
+        if (normalized.includes('below 8') || normalized.includes('below eighth') || normalized.includes('आठवीं से कम')) return 'Below 8th';
+        if (normalized.includes('8th') || normalized.includes('eighth') || normalized.includes('8 वीं') || normalized.includes('आठवीं')) return '8th Pass';
         if (normalized.includes('10th') || normalized.includes('matric') || normalized.includes('10 वीं') || normalized.includes('10th pass')) return '10th Pass';
         if (normalized.includes('12th') || normalized.includes('intermediate') || normalized.includes('12 वीं') || normalized.includes('12th pass')) return '12th Pass';
-        if (normalized.includes('iti') || normalized.includes('diploma') || normalized.includes('iti diploma')) return 'ITI/Diploma';
-        if (normalized.includes('graduate') || normalized.includes('bachelor') || normalized.includes('graduate') || normalized.includes('स्नातक')) return 'Graduate';
-        if (normalized.includes('post graduate') || normalized.includes('masters') || normalized.includes('postgraduate')) return 'Post Graduate';
+        if (normalized.includes('graduate') || normalized.includes('bachelor') || normalized.includes('स्नातक')) return 'Graduate';
         return value;
       }
       case 'state': {
@@ -258,21 +304,25 @@ const ProfileForm = () => {
       }
       case 'block': return value;
       case 'currentOccupation': return value;
+      case 'familyOccupation': return value;
       case 'currentIncomeRange': {
         const normalized = normalizeText(value);
-        if (normalized.includes('under 50000') || normalized.includes('less than 50000') || normalized.includes('below 50000') || normalized.includes('50000') && normalized.includes('less')) return '< 50000';
-        if (normalized.includes('50000') && normalized.includes('100000') || normalized.includes('50k') && normalized.includes('1 lakh') || normalized.includes('50 thousand') && normalized.includes('1 lakh')) return '50000-100000';
-        if (normalized.includes('100000') && normalized.includes('200000') || normalized.includes('1 lakh') && normalized.includes('2 lakh') || normalized.includes('100k') && normalized.includes('200k')) return '100000-200000';
-        if (normalized.includes('above 200000') || normalized.includes('more than 200000') || normalized.includes('2 lakh') && normalized.includes('more')) return '> 200000';
+        if (normalized.includes('under 50000') || normalized.includes('less than 50000') || normalized.includes('below 50000') || (normalized.includes('50000') && normalized.includes('less'))) return '< 50000';
+        if ((normalized.includes('50000') && normalized.includes('100000')) || (normalized.includes('50k') && normalized.includes('1 lakh')) || (normalized.includes('50 thousand') && normalized.includes('1 lakh'))) return '50000-100000';
+        if ((normalized.includes('100000') && normalized.includes('200000')) || (normalized.includes('1 lakh') && normalized.includes('2 lakh')) || (normalized.includes('100k') && normalized.includes('200k'))) return '100000-200000';
+        if (normalized.includes('above 200000') || normalized.includes('more than 200000') || (normalized.includes('2 lakh') && normalized.includes('more'))) return '> 200000';
         return value;
       }
-      case 'skills': return value;
+      case 'skills': {
+        const cleaned = parseSkillList(value);
+        return cleaned;
+      }
       case 'employmentPreference': {
         const normalized = normalizeText(value);
-        if (normalized.includes('self employment') || normalized.includes('self job') || normalized.includes('business') || normalized.includes('entrepreneur') || normalized.includes('swavalamban')) return 'SELF_EMPLOYMENT';
-        if (normalized.includes('wage employment') || normalized.includes('job') || normalized.includes('salary') || normalized.includes('service')) return 'WAGE_EMPLOYMENT';
-        if (normalized.includes('hybrid') || normalized.includes('both') || normalized.includes('mix')) return 'HYBRID';
-        if (normalized.includes('any') || normalized.includes('any opportunity') || normalized.includes('any job')) return 'ANY';
+        if (normalized.includes('self employment') || normalized.includes('self job') || normalized.includes('business') || normalized.includes('entrepreneur') || normalized.includes('swavalamban') || normalized.includes('स्वरोजगार') || normalized.includes('व्यवसाय') || normalized.includes('उद्यम')) return 'SELF_EMPLOYMENT';
+        if (normalized.includes('wage employment') || normalized.includes('job') || normalized.includes('salary') || normalized.includes('service') || normalized.includes('नौकरी') || normalized.includes('रोजगार') || normalized.includes('वेतन')) return 'WAGE_EMPLOYMENT';
+        if (normalized.includes('hybrid') || normalized.includes('both') || normalized.includes('mix') || normalized.includes('दोनों') || normalized.includes('मिश्रित') || normalized.includes('hybrid job')) return 'HYBRID';
+        if (normalized.includes('any') || normalized.includes('any opportunity') || normalized.includes('any job') || normalized.includes('किसी भी') || normalized.includes('किसी')) return 'ANY';
         return value;
       }
       default:
@@ -281,107 +331,28 @@ const ProfileForm = () => {
   };
 
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = speechLang;
-
-      recognition.onstart = () => {
-        setIsListening(true);
-        setFormData((prev) => ({ ...prev, source: 'VOICE' }));
-        const selectedSpeechLanguage = SPEECH_LANGUAGES.find((item) => item.code === speechLang);
-        toast.success(`Microphone active (${selectedSpeechLanguage?.label || speechLang})! Speak now.`, { id: 'speech-toast' });
-      };
-
-      recognition.onresult = (event) => {
-        let currentTranscript = '';
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          currentTranscript += transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript;
-          }
-        }
-
-        setLiveTranscript(currentTranscript);
-
-        if (currentTranscript.trim()) {
-          mapTranscriptToFormState(currentTranscript.trim(), activeVoiceFieldRef.current);
-        }
-
-        if (finalTranscript.trim()) {
-          const normalizedFinal = finalTranscript.trim();
-          const parsedValue = parseNaturalAnswer(activeVoiceFieldRef.current, normalizedFinal);
-          const committedValue = parsedValue || normalizedFinal;
-
-          setAssistantAnswer(committedValue);
-          advanceAssistantField(activeVoiceFieldRef.current, committedValue);
-          recognition.stop();
-        }
-      };
-
-      recognition.onerror = (event) => {
-        if (event.error !== 'no-speech') {
-          toast.error(`Speech recognition: ${event.error}`, { id: 'speech-toast' });
-        }
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
-      recognitionRef.current = recognition;
-    }
-
-    return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch (e) {}
-      }
-    };
-  }, [speechLang]);
-
-  useEffect(() => {
-    if (!('speechSynthesis' in window)) return;
-
-    const speakPrompt = () => {
-      if (isListening) return;
-      const utterance = new SpeechSynthesisUtterance(assistantQuestion.prompt);
-      utterance.lang = speechLang;
-      utterance.rate = 1;
-      utterance.pitch = 1;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance);
-    };
-
-    speakPrompt();
-  }, [assistantQuestion.prompt, isListening, speechLang]);
-
-  useEffect(() => {
     const fetchExistingProfile = async () => {
       try {
         const res = await client.get('/beneficiaries/profile/me');
         if (res.data.success && res.data.data) {
           const p = res.data.data;
+          setCertificateStatus(p.verification?.scCertificateStatus || 'NOT_SUBMITTED');
+          setCertificateIdentityConfirmed(p.verification?.scCertificateIdentityMatch === true);
+          setMissingProfileFields(p.missingFields || []);
+          setCorrectionRequests(p.correctionRequests || []);
           setFormData({
-            personal: { age: p.personal?.age || '', gender: p.personal?.gender || 'Male' },
-            education: { level: p.education?.level || '10th Pass', field: p.education?.field || 'General' },
+            personal: { age: p.personal?.age ?? '', gender: p.personal?.gender || '' },
+            education: { level: p.education?.level || '', field: p.education?.field || '' },
             location: {
-              state: p.location?.state || 'Madhya Pradesh',
-              district: p.location?.district || 'Bhopal',
+              state: p.location?.state || '',
+              district: p.location?.district || '',
               block: p.location?.block || '',
               village: p.location?.village || '',
             },
             livelihood: {
               currentOccupation: p.livelihood?.currentOccupation || '',
               familyOccupation: p.livelihood?.familyOccupation || '',
-              currentIncomeRange: p.livelihood?.currentIncomeRange || '< 50000',
+              currentIncomeRange: p.livelihood?.currentIncomeRange || '',
             },
             skills: Array.isArray(p.skills) ? p.skills.join(', ') : p.skills || '',
             traditionalSkills: Array.isArray(p.traditionalSkills) ? p.traditionalSkills.join(', ') : p.traditionalSkills || '',
@@ -391,9 +362,16 @@ const ProfileForm = () => {
             preferredLanguage: p.preferredLanguage || 'Hindi',
             source: p.source || 'FORM',
           });
+          const preferredCode = String(p.preferredLanguage || '').toLowerCase().split(/[-_]/)[0];
+          const matchingSpeechLanguage = SPEECH_LANGUAGES.find((item) => item.code.toLowerCase().startsWith(preferredCode));
+          if (matchingSpeechLanguage) setSpeechLang(matchingSpeechLanguage.code);
         }
       } catch (err) {
-        console.log('No pre-existing profile found, starting fresh form.');
+        if (err.response?.status === 404) {
+          setCertificateStatus('NOT_SUBMITTED');
+        } else {
+          toast.error(err.response?.data?.message || 'Could not load your saved profile.');
+        }
       } finally {
         setFetching(false);
       }
@@ -401,138 +379,127 @@ const ProfileForm = () => {
     fetchExistingProfile();
   }, []);
 
-  const mapTranscriptToFormState = (text, targetField = activeVoiceField) => {
-    setFormData((prev) => {
-      const updated = { ...prev };
-      const normalizedValue = parseNaturalAnswer(targetField, text);
+  const uploadCertificateBeforeProfile = async (event) => {
+    event.preventDefault();
+    if (!certificateFile) {
+      setCertificateError('Choose an SC certificate image first.');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('document', certificateFile);
+    setCertificateBusy(true);
+    setCertificateError('');
+    try {
+      await client.post('/documents/source-certificates', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setCertificateStatus('PENDING_REVIEW');
+      setCertificateIdentityConfirmed(false);
+      setCertificateFile(null);
+      event.currentTarget.reset();
+      toast.success('Certificate uploaded. An officer must verify the certificate and identity before profile filling.');
+    } catch (error) {
+      setCertificateError(error.response?.data?.message || 'Certificate upload failed.');
+    } finally {
+      setCertificateBusy(false);
+    }
+  };
 
-      if (targetField === 'skills') updated.skills = normalizedValue || text;
-      else if (targetField === 'interests') updated.interests = normalizedValue || text;
-      else if (targetField === 'aspirations') updated.aspirations = normalizedValue || text;
-      else if (targetField === 'currentOccupation') updated.livelihood = { ...updated.livelihood, currentOccupation: normalizedValue || text };
-      else if (targetField === 'age') {
-        const parsedAge = parseSpokenAge(text);
-        if (parsedAge) updated.personal = { ...updated.personal, age: parsedAge };
-      } else if (targetField === 'gender') {
-        const parsedGender = parseNaturalAnswer('gender', text);
-        if (parsedGender) updated.personal = { ...updated.personal, gender: parsedGender };
-      } else if (targetField === 'educationLevel') {
-        const parsedEducation = parseNaturalAnswer('educationLevel', text);
-        if (parsedEducation) updated.education = { ...updated.education, level: parsedEducation };
-      } else if (targetField === 'state') {
-        const parsedState = parseNaturalAnswer('state', text);
-        if (parsedState) {
-          const matchedState = findMatchingState(parsedState);
-          const newState = matchedState || parsedState;
-          const defaultDistrict = INDIAN_STATES_DISTRICTS[newState]?.[0] || updated.location.district || 'Bhopal';
-          updated.location = { ...updated.location, state: newState, district: defaultDistrict };
-        }
-      } else if (targetField === 'district') {
-        const parsedDistrict = parseNaturalAnswer('district', text);
-        if (parsedDistrict) updated.location = { ...updated.location, district: parsedDistrict };
-      } else if (targetField === 'block') updated.location = { ...updated.location, block: normalizedValue || text };
-      else if (targetField === 'currentIncomeRange') {
-        const parsedIncome = parseNaturalAnswer('currentIncomeRange', text);
-        if (parsedIncome) updated.livelihood = { ...updated.livelihood, currentIncomeRange: parsedIncome };
-      } else if (targetField === 'employmentPreference') {
-        const parsedPreference = parseNaturalAnswer('employmentPreference', text);
-        if (parsedPreference) updated.employmentPreference = parsedPreference;
+  const refreshCertificateStatus = async () => {
+    setCertificateBusy(true);
+    setCertificateError('');
+    try {
+      const response = await client.get('/beneficiaries/profile/me');
+      const verification = response.data.data?.verification || {};
+      setCertificateStatus(verification.scCertificateStatus || 'NOT_SUBMITTED');
+      setCertificateIdentityConfirmed(verification.scCertificateIdentityMatch === true);
+    } catch (error) {
+      if (error.response?.status === 404) {
+        setCertificateStatus('NOT_SUBMITTED');
+        setCertificateIdentityConfirmed(false);
+      } else {
+        setCertificateError(error.response?.data?.message || 'Could not refresh verification status.');
       }
-      return updated;
-    });
+    } finally {
+      setCertificateBusy(false);
+    }
   };
 
-  const handleNestedChange = (category, field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [category]: { ...prev[category], [field]: value },
-    }));
-  };
+  useEffect(() => {
+    if (fetching || (user?.role === 'BENEFICIARY' && (certificateStatus !== 'VERIFIED' || !certificateIdentityConfirmed)) || !assistantQuestion?.prompt) return;
+    if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return;
+
+    const utterance = new SpeechSynthesisUtterance(assistantQuestion.prompt);
+    utterance.lang = speechLang;
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    window.speechSynthesis?.cancel();
+    window.speechSynthesis?.speak(utterance);
+
+    return () => {
+      window.speechSynthesis?.cancel();
+    };
+  }, [assistantQuestion, certificateIdentityConfirmed, certificateStatus, fetching, speechLang, user?.role]);
 
   const handleStateChange = (newState) => {
-    const defaultDistrict = INDIAN_STATES_DISTRICTS[newState]?.[0] || 'Default District';
     setFormData((prev) => ({
       ...prev,
-      location: { ...prev.location, state: newState, district: defaultDistrict },
+      location: { ...prev.location, state: newState, district: prev.location.state === newState ? prev.location.district : '' },
     }));
+  };
+
+  const setProfileFieldValue = (field, value) => {
+    switch (field) {
+      case 'age':
+        setFormData((prev) => ({ ...prev, personal: { ...prev.personal, age: value } }));
+        break;
+      case 'gender':
+        setFormData((prev) => ({ ...prev, personal: { ...prev.personal, gender: value } }));
+        break;
+      case 'educationLevel':
+        setFormData((prev) => ({ ...prev, education: { ...prev.education, level: value } }));
+        break;
+      case 'state':
+        handleStateChange(findMatchingState(value) || value);
+        break;
+      case 'district':
+        setFormData((prev) => ({ ...prev, location: { ...prev.location, district: value } }));
+        break;
+      case 'block':
+        setFormData((prev) => ({ ...prev, location: { ...prev.location, block: value } }));
+        break;
+      case 'currentOccupation':
+        setFormData((prev) => ({ ...prev, livelihood: { ...prev.livelihood, currentOccupation: value } }));
+        break;
+      case 'familyOccupation':
+        setFormData((prev) => ({ ...prev, livelihood: { ...prev.livelihood, familyOccupation: value } }));
+        break;
+      case 'currentIncomeRange':
+        setFormData((prev) => ({ ...prev, livelihood: { ...prev.livelihood, currentIncomeRange: value } }));
+        break;
+      case 'skills':
+      case 'traditionalSkills':
+      case 'interests':
+      case 'aspirations':
+        setFormData((prev) => ({ ...prev, [field]: value }));
+        break;
+      case 'employmentPreference':
+        setFormData((prev) => ({ ...prev, employmentPreference: value }));
+        break;
+      default:
+        break;
+    }
   };
 
   const handleAssistantStepSelection = (nextStep) => {
     setStep(nextStep);
     setAssistantFieldIndex((prev) => ({ ...prev, [nextStep]: 0 }));
-    setAssistantAnswer('');
-  };
-
-  const toggleSpeechRecognition = (targetField) => {
-    activeVoiceFieldRef.current = targetField;
-    setActiveVoiceField(targetField);
-    if (isListening) {
-      recognitionRef.current?.stop();
-    } else {
-      try {
-        setLiveTranscript('');
-        recognitionRef.current?.start();
-      } catch (err) {
-        console.error('Speech start error:', err);
-      }
-    }
+    setAssistantAnswer(null);
   };
 
   const advanceAssistantField = (fieldName, nextValue) => {
-    const updateFieldValue = (field, nextValue) => {
-      switch (field) {
-        case 'age':
-          setFormData((prev) => ({ ...prev, personal: { ...prev.personal, age: nextValue } }));
-          break;
-        case 'gender':
-          setFormData((prev) => ({ ...prev, personal: { ...prev.personal, gender: nextValue } }));
-          break;
-        case 'educationLevel':
-          setFormData((prev) => ({ ...prev, education: { ...prev.education, level: nextValue } }));
-          break;
-        case 'state': {
-          const matchedState = findMatchingState(nextValue);
-          if (matchedState) {
-            handleStateChange(matchedState);
-          } else {
-            setFormData((prev) => ({
-              ...prev,
-              location: { ...prev.location, state: nextValue },
-            }));
-          }
-          break;
-        }
-        case 'district':
-          setFormData((prev) => ({ ...prev, location: { ...prev.location, district: nextValue } }));
-          break;
-        case 'block':
-          setFormData((prev) => ({ ...prev, location: { ...prev.location, block: nextValue } }));
-          break;
-        case 'currentOccupation':
-          setFormData((prev) => ({
-            ...prev,
-            livelihood: { ...prev.livelihood, currentOccupation: nextValue },
-          }));
-          break;
-        case 'currentIncomeRange':
-          setFormData((prev) => ({
-            ...prev,
-            livelihood: { ...prev.livelihood, currentIncomeRange: nextValue },
-          }));
-          break;
-        case 'skills':
-          setFormData((prev) => ({ ...prev, skills: nextValue }));
-          break;
-        case 'employmentPreference':
-          setFormData((prev) => ({ ...prev, employmentPreference: nextValue }));
-          break;
-        default:
-          break;
-      }
-    };
-
-    updateFieldValue(fieldName, nextValue);
-    setAssistantAnswer('');
+    setProfileFieldValue(fieldName, nextValue);
+    setAssistantAnswer(null);
 
     const nextIndex = (assistantFieldIndex[step] ?? 0) + 1;
     const totalFields = PROFILE_ASSISTANT_FIELD_ORDER[step]?.length || 1;
@@ -548,10 +515,28 @@ const ProfileForm = () => {
     }
   };
 
+  const handleNavigatorProfileAnswer = useEffectEvent((event) => {
+    const transcript = String(event.detail?.transcript || '').trim();
+    if (!transcript) return;
+    const field = assistantQuestion.field;
+    const parsedValue = parseNaturalAnswer(field, transcript);
+    advanceAssistantField(field, parsedValue || transcript);
+  });
+
+  useEffect(() => {
+    window.addEventListener('navigator:profile-answer', handleNavigatorProfileAnswer);
+    return () => window.removeEventListener('navigator:profile-answer', handleNavigatorProfileAnswer);
+  }, []);
+
   const applyAssistantAnswer = () => {
-    const rawValue = assistantAnswer.trim();
+    const rawValue = String(assistantAnswer ?? '').trim();
     if (!rawValue) {
-      toast.error('Please answer the question first.');
+      const optionalFields = ['currentOccupation', 'familyOccupation', 'currentIncomeRange', 'traditionalSkills'];
+      if (!optionalFields.includes(assistantQuestion.field)) {
+        toast.error('Please answer the question first.');
+        return;
+      }
+      advanceAssistantField(assistantQuestion.field, '');
       return;
     }
 
@@ -562,12 +547,56 @@ const ProfileForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const ageText = String(formData.personal.age).trim();
+    const age = Number(ageText);
+    if (!ageText || !Number.isInteger(age) || age < 0 || age > 130) {
+      toast.error('Enter a valid age between 0 and 130.');
+      setStep(1);
+      setAssistantFieldIndex((previous) => ({ ...previous, 1: 0 }));
+      return;
+    }
+    if (!formData.education.level) {
+      toast.error('Select your highest completed education level.');
+      setStep(2);
+      setAssistantFieldIndex((previous) => ({ ...previous, 2: 0 }));
+      return;
+    }
+    if (!formData.location.state.trim() || !formData.location.district.trim()) {
+      toast.error('Enter your state and district.');
+      setStep(2);
+      setAssistantFieldIndex((previous) => ({ ...previous, 2: !formData.location.state.trim() ? 1 : 2 }));
+      return;
+    }
+    if (!formData.skills.trim() && !formData.traditionalSkills.trim()) {
+      toast.error('Add at least one current or traditional skill.');
+      setStep(4);
+      setAssistantFieldIndex((previous) => ({ ...previous, 4: 0 }));
+      return;
+    }
+    if (!formData.interests.trim()) {
+      toast.error('Add at least one work interest.');
+      setStep(4);
+      setAssistantFieldIndex((previous) => ({ ...previous, 4: 2 }));
+      return;
+    }
+    if (!formData.aspirations.trim()) {
+      toast.error('Add at least one livelihood goal.');
+      setStep(4);
+      setAssistantFieldIndex((previous) => ({ ...previous, 4: 3 }));
+      return;
+    }
+    if (!formData.employmentPreference) {
+      toast.error('Choose the type of work you prefer.');
+      setStep(4);
+      setAssistantFieldIndex((previous) => ({ ...previous, 4: 4 }));
+      return;
+    }
     setLoading(true);
 
     const payload = {
       personal: {
-        age: Number(formData.personal.age) || 25,
-        gender: formData.personal.gender,
+        age,
+        ...(formData.personal.gender ? { gender: formData.personal.gender } : {}),
       },
       education: formData.education,
       location: formData.location,
@@ -577,7 +606,7 @@ const ProfileForm = () => {
       interests: formData.interests.split(',').map((s) => s.trim()).filter(Boolean),
       aspirations: formData.aspirations.split(',').map((s) => s.trim()).filter(Boolean),
       employmentPreference: formData.employmentPreference,
-      preferredLanguage: formData.preferredLanguage,
+      preferredLanguage: speechLang.split('-')[0],
       source: formData.source,
     };
 
@@ -611,8 +640,12 @@ const ProfileForm = () => {
       district: formData.location.district,
       block: formData.location.block,
       currentOccupation: formData.livelihood.currentOccupation,
+      familyOccupation: formData.livelihood.familyOccupation,
       currentIncomeRange: formData.livelihood.currentIncomeRange,
       skills: formData.skills,
+      traditionalSkills: formData.traditionalSkills,
+      interests: formData.interests,
+      aspirations: formData.aspirations,
       employmentPreference: formData.employmentPreference,
     }[field];
 
@@ -622,10 +655,11 @@ const ProfileForm = () => {
       case 'gender':
         return (
           <select
-            value={currentValue}
-            onChange={(e) => setAssistantAnswer(e.target.value)}
+            value={assistantAnswer ?? currentValue ?? ''}
+            onChange={(e) => { setAssistantAnswer(e.target.value); setProfileFieldValue(field, e.target.value); }}
             className={fieldClassName}
           >
+            <option value="">Select gender</option>
             <option value="Female">Female</option>
             <option value="Male">Male</option>
             <option value="Other">Other</option>
@@ -634,50 +668,60 @@ const ProfileForm = () => {
       case 'educationLevel':
         return (
           <select
-            value={currentValue}
-            onChange={(e) => setAssistantAnswer(e.target.value)}
+            value={assistantAnswer ?? currentValue ?? ''}
+            onChange={(e) => { setAssistantAnswer(e.target.value); setProfileFieldValue(field, e.target.value); }}
             className={fieldClassName}
           >
+            <option value="">Select education level</option>
             <option value="Below 8th">Below 8th</option>
             <option value="8th Pass">8th Pass</option>
             <option value="10th Pass">10th Pass</option>
             <option value="12th Pass">12th Pass</option>
-            <option value="ITI/Diploma">ITI / Diploma</option>
+            <option value="ITI">ITI</option>
+            <option value="Diploma">Diploma</option>
             <option value="Graduate">Graduate</option>
             <option value="Post Graduate">Post Graduate</option>
           </select>
         );
       case 'state':
         return (
-          <select
-            value={currentValue}
-            onChange={(e) => setAssistantAnswer(e.target.value)}
+          <input
+            list="profile-state-options"
+            value={assistantAnswer ?? currentValue ?? ''}
+            onChange={(e) => { setAssistantAnswer(e.target.value); setProfileFieldValue(field, e.target.value); }}
+            placeholder="Type your state"
             className={fieldClassName}
-          >
-            {Object.keys(INDIAN_STATES_DISTRICTS).map((st) => (
-              <option key={st} value={st}>{st}</option>
-            ))}
-          </select>
+          />
         );
       case 'district':
         return (
-          <select
-            value={currentValue}
-            onChange={(e) => setAssistantAnswer(e.target.value)}
+          <input
+            list="profile-district-options"
+            value={assistantAnswer ?? currentValue ?? ''}
+            onChange={(e) => { setAssistantAnswer(e.target.value); setProfileFieldValue(field, e.target.value); }}
+            placeholder="Type your district"
             className={fieldClassName}
-          >
-            {currentDistricts.map((dist) => (
-              <option key={dist} value={dist}>{dist}</option>
-            ))}
-          </select>
+          />
+        );
+      case 'currentOccupation':
+      case 'block':
+        return (
+          <input
+            type="text"
+            value={assistantAnswer ?? currentValue ?? ''}
+            onChange={(e) => { setAssistantAnswer(e.target.value); setProfileFieldValue(field, e.target.value); }}
+            placeholder={assistantQuestion.helper}
+            className={fieldClassName}
+          />
         );
       case 'currentIncomeRange':
         return (
           <select
-            value={currentValue}
-            onChange={(e) => setAssistantAnswer(e.target.value)}
+            value={assistantAnswer ?? currentValue ?? ''}
+            onChange={(e) => { setAssistantAnswer(e.target.value); setProfileFieldValue(field, e.target.value); }}
             className={fieldClassName}
           >
+            <option value="">Select income range</option>
             <option value="< 50000">&lt; ₹50,000</option>
             <option value="50000-100000">₹50,000 - ₹1,00,000</option>
             <option value="100000-200000">₹1,00,000 - ₹2,00,000</option>
@@ -687,28 +731,44 @@ const ProfileForm = () => {
       case 'employmentPreference':
         return (
           <select
-            value={currentValue}
-            onChange={(e) => setAssistantAnswer(e.target.value)}
+            value={assistantAnswer ?? currentValue ?? ''}
+            onChange={(e) => { setAssistantAnswer(e.target.value); setProfileFieldValue(field, e.target.value); }}
             className={fieldClassName}
           >
-            <option value="SELF_EMPLOYMENT">SELF_EMPLOYMENT</option>
-            <option value="WAGE_EMPLOYMENT">WAGE_EMPLOYMENT</option>
-            <option value="HYBRID">HYBRID</option>
-            <option value="ANY">ANY</option>
+            <option value="">Select work preference</option>
+            <option value="SELF_EMPLOYMENT">Self-employment</option>
+            <option value="WAGE_EMPLOYMENT">Wage employment</option>
+            <option value="HYBRID">Both</option>
+            <option value="ANY">Open to any</option>
           </select>
         );
       default:
         return (
           <input
             type={field === 'age' ? 'number' : 'text'}
-            value={currentValue || assistantAnswer}
-            onChange={(e) => setAssistantAnswer(e.target.value)}
+            min={field === 'age' ? 0 : undefined}
+            max={field === 'age' ? 130 : undefined}
+            value={assistantAnswer ?? currentValue ?? ''}
+            onChange={(e) => { setAssistantAnswer(e.target.value); setProfileFieldValue(field, e.target.value); }}
             placeholder={assistantQuestion.helper}
             className={fieldClassName}
           />
         );
     }
   };
+
+  const locationOptions = (
+    <>
+      <datalist id="profile-state-options">
+        {Object.keys(INDIAN_STATES_DISTRICTS).map((state) => <option key={state} value={state} />)}
+      </datalist>
+      <datalist id="profile-district-options">
+            {currentDistricts.map((dist) => (
+              <option key={dist} value={dist}>{dist}</option>
+            ))}
+      </datalist>
+    </>
+  );
 
   if (fetching) {
     return (
@@ -718,132 +778,105 @@ const ProfileForm = () => {
     );
   }
 
+  if (user?.role === 'BENEFICIARY' && (certificateStatus !== 'VERIFIED' || !certificateIdentityConfirmed)) {
+    const isPending = certificateStatus === 'PENDING_REVIEW';
+    const isRejected = certificateStatus === 'REJECTED';
+    return (
+      <div className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 py-10 bg-[var(--color-bg)]">
+        <section className="overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg">
+          <div className="flex items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-bg)] p-6 sm:p-8">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--color-accent-secondary)]/10 text-[var(--color-accent-secondary)]">
+              <ShieldCheck className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-text-secondary)]">Required before profile setup</p>
+              <h1 className="text-2xl font-black text-[var(--color-text-primary)]">Verify your SC certificate</h1>
+            </div>
+          </div>
+
+          <div className="space-y-5 p-6 sm:p-8">
+            <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
+              Upload your certificate first. Profile questions and livelihood recommendations unlock after an officer confirms the document and matches its identity details to your account.
+            </p>
+
+            <div className={`rounded-xl border p-4 text-sm font-semibold ${isPending ? 'border-amber-300 bg-amber-50 text-amber-800' : isRejected ? 'border-red-300 bg-red-50 text-red-800' : 'border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text-secondary)]'}`}>
+              {isPending
+                ? 'Certificate received. Waiting for officer verification.'
+                : isRejected
+                  ? 'The submitted certificate was rejected. Review the officer feedback and upload a corrected image.'
+                  : certificateStatus === 'VERIFIED'
+                    ? 'Certificate authenticity was reviewed, but the identity match is not yet confirmed. Please contact an officer.'
+                    : 'No certificate has been submitted yet.'}
+            </div>
+
+            {certificateStatus !== 'PENDING_REVIEW' && (
+              <form onSubmit={uploadCertificateBeforeProfile} className="space-y-4">
+                <label className="block text-sm font-bold text-[var(--color-text-secondary)]">
+                  SC certificate image (JPEG, PNG, or WebP; maximum 5 MB)
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(event) => setCertificateFile(event.target.files?.[0] || null)}
+                    className="mt-2 block w-full text-sm"
+                  />
+                </label>
+                <button type="submit" disabled={certificateBusy || !certificateFile} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-accent-secondary)] px-5 py-3 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                  {certificateBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  Upload certificate
+                </button>
+              </form>
+            )}
+
+            {isPending && (
+              <button type="button" onClick={refreshCertificateStatus} disabled={certificateBusy} className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-border)] px-4 py-2.5 text-sm font-bold text-[var(--color-text-primary)] disabled:opacity-60">
+                {certificateBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Check verification status
+              </button>
+            )}
+
+            {certificateError && <p role="alert" className="text-sm font-semibold text-red-700">{certificateError}</p>}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-6 bg-[var(--color-bg)]">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
-        <div>
-          <h1 className="text-3xl font-black text-[var(--color-text-primary)] tracking-tight">{t('profileTitle')}</h1>
-          <p className="text-sm text-[var(--color-text-secondary)] font-medium mt-1">{t('profileSub')}</p>
-        </div>
-
-        {/* Voice Controls & Language Switcher */}
-        <div className="flex items-center space-x-2">
-          <label className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-bold text-[var(--color-text-primary)] shadow-xs">
-            <Globe className="w-3.5 h-3.5 text-[var(--color-accent-primary)]" />
-            <select
-              value={speechLang}
-              onChange={(event) => {
-                setSpeechLang(event.target.value);
-                const selected = SPEECH_LANGUAGES.find((item) => item.code === event.target.value);
-                toast.success(`Speech language changed to ${selected?.label || event.target.value}`);
-              }}
-              aria-label="Speech language"
-              className="bg-transparent outline-none cursor-pointer"
-            >
-              {SPEECH_LANGUAGES.map((item) => (
-                <option key={item.code} value={item.code}>{item.label}</option>
-              ))}
-            </select>
-          </label>
-
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => toggleSpeechRecognition('skills')}
-            type="button"
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl border text-xs font-extrabold transition-all btn-bouncy ${
-              isListening
-                ? 'bg-rose-600 text-white border-rose-700 shadow-md animate-pulse'
-                : 'bg-[var(--color-surface)] text-[var(--color-accent-secondary)] border-[var(--color-accent-secondary)]'
-            }`}
-          >
-            {isListening ? (
-              <>
-                <MicOff className="w-4 h-4 text-white animate-bounce" />
-                <span>Mic Active (Stop)</span>
-              </>
-            ) : (
-              <>
-                <Mic className="w-4 h-4 text-[var(--color-accent-secondary)]" />
-                <span>Web Speech Mic</span>
-              </>
-            )}
-          </motion.button>
+      <div className="mb-2">
+        <h1 className="text-3xl font-black text-[var(--color-text-primary)] tracking-tight">{t('profileTitle')}</h1>
+        <p className="text-sm text-[var(--color-text-secondary)] font-medium mt-1">{t('profileSub')}</p>
+        <div className="mt-4 space-y-3">
+          {missingProfileFields.length > 0 && (
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-extrabold text-[var(--color-text-primary)]">Profile completeness</p>
+                <span className="text-xs font-bold text-[var(--color-accent-primary)]">{Math.round(((10 - missingProfileFields.length) / 10) * 100)}%</span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--color-bg)]">
+                <div className="h-full rounded-full bg-[var(--color-accent-primary)]" style={{ width: `${Math.round(((10 - missingProfileFields.length) / 10) * 100)}%` }} />
+              </div>
+              <p className="mt-2 text-xs text-[var(--color-text-secondary)]">Still needed: {missingProfileFields.map((field) => field.label).join(', ')}</p>
+            </div>
+          )}
+          {correctionRequests.filter((request) => request.status === 'PENDING').map((request) => (
+            <div key={request._id} className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+              <p className="text-sm font-extrabold">Officer requested profile corrections</p>
+              <p className="mt-1 text-xs">Reason: {request.reason}</p>
+              <p className="mt-1 text-xs">Please update only: {request.fields.map((field) => {
+                const labels = {
+                  'personal.age': 'Age', 'personal.gender': 'Gender', 'education.level': 'Education level', 'education.field': 'Education field',
+                  'location.state': 'State', 'location.district': 'District', 'location.block': 'Block', 'location.village': 'Village',
+                  'livelihood.currentOccupation': 'Current occupation', 'livelihood.familyOccupation': 'Family occupation',
+                  'livelihood.currentIncomeRange': 'Income range', skills: 'Skills', traditionalSkills: 'Traditional skills',
+                  interests: 'Work interests', aspirations: 'Livelihood goals', employmentPreference: 'Employment preference',
+                };
+                return labels[field] || field;
+              }).join(', ')}.</p>
+            </div>
+          ))}
         </div>
       </div>
-
-      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-4 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[var(--color-accent-primary)]">
-              {activeLanguagePrompts.title}
-            </p>
-            <h2 className="mt-2 text-xl font-black text-[var(--color-text-primary)]">
-              {assistantQuestion.prompt}
-            </h2>
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{assistantQuestion.helper}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => toggleSpeechRecognition(assistantQuestion.field)}
-            className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-extrabold border ${
-              isListening
-                ? 'border-rose-500 bg-rose-500 text-white'
-                : 'border-[var(--color-accent-secondary)] bg-[var(--color-bg)] text-[var(--color-accent-secondary)]'
-            }`}
-          >
-            {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-            {isListening ? 'Listening' : 'Speak'}
-          </button>
-        </div>
-
-        <div className="mt-4 flex gap-3">
-          <input
-            value={assistantAnswer}
-            onChange={(event) => setAssistantAnswer(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                applyAssistantAnswer();
-              }
-            }}
-            placeholder={assistantQuestion.helper}
-            className="flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-accent-primary)] focus:ring-2 focus:ring-[var(--color-accent-primary)]/20"
-          />
-          <button
-            type="button"
-            onClick={applyAssistantAnswer}
-            className="rounded-xl bg-[var(--color-accent-primary)] px-4 py-3 text-sm font-extrabold text-white shadow-sm hover:opacity-95"
-          >
-            Next
-          </button>
-        </div>
-      </div>
-
-      {/* Live Voice Transcription Banner */}
-      <AnimatePresence>
-        {isListening && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mb-4 bg-[var(--color-surface)] border border-[var(--color-accent-secondary)] rounded-2xl p-4 flex items-center space-x-3 shadow-md"
-          >
-            <div className="w-8 h-8 rounded-full bg-[var(--color-accent-secondary)] text-white flex items-center justify-center shrink-0">
-              <Volume2 className="w-4 h-4 animate-ping" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-extrabold text-[var(--color-accent-secondary)] uppercase tracking-wider">
-                Listening ({SPEECH_LANGUAGES.find((item) => item.code === speechLang)?.label || speechLang}) → Target Field: <span className="underline">{activeVoiceField}</span>
-              </p>
-              <p className="text-sm font-bold text-[var(--color-text-primary)] truncate mt-0.5">
-                {liveTranscript ? `"${liveTranscript}"` : 'Speak into microphone to populate field live...'}
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Progress Steps */}
       <div className="grid grid-cols-4 gap-2 mb-6">
@@ -853,7 +886,7 @@ const ProfileForm = () => {
           return (
             <div
               key={idx}
-              onClick={() => setStep(idx + 1)}
+              onClick={() => handleAssistantStepSelection(idx + 1)}
               className={`cursor-pointer p-3 rounded-2xl border text-center transition-all ${
                 isCurrent
                   ? 'btn-accent shadow-md'
@@ -891,18 +924,7 @@ const ProfileForm = () => {
                     <span>{assistantQuestion.prompt}</span>
                   </h3>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => toggleSpeechRecognition(assistantQuestion.field)}
-                  className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-extrabold border ${
-                    isListening
-                      ? 'border-rose-500 bg-rose-500 text-white'
-                      : 'border-[var(--color-accent-secondary)] bg-[var(--color-bg)] text-[var(--color-accent-secondary)]'
-                  }`}
-                >
-                  {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-                  {isListening ? 'Listening' : 'Speak'}
-                </button>
+
               </div>
 
               <div className="space-y-4">
@@ -910,6 +932,7 @@ const ProfileForm = () => {
                   {assistantQuestion.helper}
                 </label>
                 {renderCurrentFieldInput()}
+                {locationOptions}
               </div>
             </motion.div>
           </AnimatePresence>
@@ -918,7 +941,7 @@ const ProfileForm = () => {
             {step > 1 ? (
               <button
                 type="button"
-                onClick={() => setStep(step - 1)}
+                onClick={() => handleAssistantStepSelection(step - 1)}
                 className="flex items-center space-x-2 px-5 py-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text-primary)] hover:opacity-90 text-sm font-extrabold btn-bouncy"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -926,13 +949,13 @@ const ProfileForm = () => {
               </button>
             ) : <div />}
 
-            {step < 4 ? (
+            {step < 4 || (assistantFieldIndex[4] ?? 0) < currentFieldOrder.length - 1 ? (
               <button
                 type="button"
                 onClick={applyAssistantAnswer}
                 className="flex items-center space-x-2 px-6 py-2.5 rounded-xl btn-accent font-extrabold text-sm shadow-md btn-bouncy"
               >
-                <span>{t('nextSectionBtn')}</span>
+                <span>{step < 4 ? t('nextSectionBtn') : 'Next question'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             ) : (

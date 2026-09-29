@@ -18,6 +18,11 @@
 }
 
 .site-navbar {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
   width: min(1240px, calc(100% - 28px));
   margin: 14px auto 0;
   padding: 2px;
@@ -29,6 +34,44 @@
     #138808 66.66% 100%
   );
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14);
+}
+
+main {
+  padding-top: 174px;
+}
+
+.navbar-identity-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  margin: 0 10px 8px;
+  padding: 5px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+.navbar-identity-name {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navbar-identity-role {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border: 1px solid var(--color-accent-secondary);
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-accent-secondary);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
 }
 
 .site-navbar-inner {
@@ -103,6 +146,17 @@ html.dark .brand-mark {
     padding-top: 5px;
     padding-bottom: 5px;
     border-radius: 16px;
+  }
+
+  main {
+    padding-top: 210px;
+  }
+
+  .navbar-identity-strip {
+    margin-right: 8px;
+    margin-left: 8px;
+    padding-right: 12px;
+    padding-left: 12px;
   }
 
   .site-navbar-inner > a:first-child span {
@@ -442,6 +496,15 @@ html.dark .voice-assistant-panel {
     min-height: 68px;
     padding-left: 10px;
     padding-right: 10px;
+  }
+
+  main {
+    padding-top: 210px;
+  }
+
+  .navbar-identity-strip {
+    margin-right: 8px;
+    margin-left: 8px;
   }
 
   .navbar-actions {

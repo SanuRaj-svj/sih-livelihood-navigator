@@ -1,5 +1,23 @@
 const mongoose = require('mongoose');
 
+const profileCorrectionRequestSchema = new mongoose.Schema({
+  fields: [{
+    type: String,
+    enum: [
+      'personal.age', 'personal.gender', 'education.level', 'education.field',
+      'location.state', 'location.district', 'location.block', 'location.village',
+      'livelihood.currentOccupation', 'livelihood.familyOccupation', 'livelihood.currentIncomeRange',
+      'skills', 'traditionalSkills', 'interests', 'aspirations', 'employmentPreference',
+    ],
+    required: true,
+  }],
+  reason: { type: String, trim: true, required: true, maxlength: 1000 },
+  status: { type: String, enum: ['PENDING', 'COMPLETED'], default: 'PENDING' },
+  requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  requestedAt: { type: Date, default: Date.now },
+  completedAt: Date,
+}, { _id: true });
+
 const beneficiaryProfileSchema = new mongoose.Schema(
   {
     userId: {
@@ -65,6 +83,17 @@ const beneficiaryProfileSchema = new mongoose.Schema(
       enum: ['FORM', 'VOICE', 'OFFICER', 'MIXED'],
       default: 'FORM',
     },
+    verification: {
+      scCertificateStatus: {
+        type: String,
+        enum: ['NOT_SUBMITTED', 'PENDING_REVIEW', 'VERIFIED', 'REJECTED'],
+        default: 'NOT_SUBMITTED',
+      },
+      scCertificateIdentityMatch: { type: Boolean, default: false },
+      scCertificateVerifiedAt: Date,
+      scCertificateReviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    },
+    correctionRequests: { type: [profileCorrectionRequestSchema], default: [] },
   },
   {
     timestamps: true,

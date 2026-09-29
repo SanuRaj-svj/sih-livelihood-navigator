@@ -11,6 +11,12 @@ const outcomeSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'TrainingEnrollment',
     },
+    opportunityApplicationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'OpportunityApplication',
+      unique: true,
+      sparse: true,
+    },
     outcomeType: {
       type: String,
       enum: ['WAGE_EMPLOYED', 'SELF_EMPLOYED', 'UNEMPLOYED', 'FURTHER_TRAINING'],

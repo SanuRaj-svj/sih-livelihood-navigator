@@ -1,6 +1,38 @@
+const mongoose = require('mongoose');
 const NSQFCourse = require('../../models/NSQFCourse');
 const TrainingCenter = require('../../models/TrainingCenter');
 const Opportunity = require('../../models/Opportunity');
+
+const fallbackOpportunities = [
+  {
+    title: 'Retail Service & Sales Micro-Enterprise',
+    type: 'SELF_EMPLOYMENT',
+    sector: 'Retail & Services',
+    description: 'Customer-facing micro-business opportunity for local retail, repair, and service delivery.',
+    requiredSkills: ['Sales', 'Customer Service'],
+  },
+  {
+    title: 'Agriculture Support & Input Services',
+    type: 'SELF_EMPLOYMENT',
+    sector: 'Agriculture',
+    description: 'Seasonal demand for field support, input supply, and maintenance services in rural communities.',
+    requiredSkills: ['Farm Support', 'Basic Business Operations'],
+  },
+  {
+    title: 'Digital Service Center Assistant',
+    type: 'WAGE_EMPLOYMENT',
+    sector: 'IT-ITeS',
+    description: 'Entry-level digital service role for local documentation, data entry, and digital assistance work.',
+    requiredSkills: ['Basic Computer Skills', 'Data Entry'],
+  },
+  {
+    title: 'Skilled Workshop & Repair Technician',
+    type: 'WAGE_EMPLOYMENT',
+    sector: 'Electrical & Power',
+    description: 'Hands-on technical work for repair, installation, and maintenance services in local markets.',
+    requiredSkills: ['Electrical Basics', 'Repair Skills'],
+  },
+];
 
 /**
  * Heuristic Rule-Based Recommendation Engine
@@ -168,6 +200,18 @@ const getRecommendations = async (beneficiaryProfile) => {
     }
   } else {
     opportunities = await Opportunity.find({});
+  }
+
+  if (!opportunities.length) {
+    opportunities = fallbackOpportunities.map((opp) => ({
+      _id: new mongoose.Types.ObjectId(),
+      title: opp.title,
+      type: opp.type,
+      sector: opp.sector,
+      description: opp.description,
+      requiredSkills: opp.requiredSkills,
+      location: { type: 'Point', coordinates: [0, 0] },
+    }));
   }
 
   for (const opp of opportunities) {

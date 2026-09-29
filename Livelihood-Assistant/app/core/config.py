@@ -79,6 +79,23 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
 
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def validate_debug_flag(cls, value):
+        if value is None:
+            return False
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "y", "on", "enable", "enabled", "debug"}:
+                return True
+            if normalized in {"0", "false", "no", "n", "off", "disable", "disabled", "warn", "warning", "error", "critical", "info"}:
+                return False
+        return False
+
     @field_validator("APP_ENV")
     @classmethod
     def validate_environment(cls, value: str) -> str:
@@ -91,6 +108,8 @@ class Settings(BaseSettings):
     @classmethod
     def validate_log_level(cls, value: str) -> str:
         level = value.strip().upper()
+        if level == "WARN":
+            level = "WARNING"
         if level not in {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}:
             raise ValueError("LOG_LEVEL must be a standard Python logging level")
         return level

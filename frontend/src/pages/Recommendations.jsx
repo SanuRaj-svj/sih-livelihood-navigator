@@ -7,6 +7,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { CardSkeleton } from '../components/SkeletonLoader';
 import { Sparkles, BookOpen, Building2, Briefcase, CheckCircle2, ArrowRight, MapPin, Award, Layers, X, Phone, Users, ShieldCheck, Info, RefreshCw } from 'lucide-react';
 import { MatchMascot, EmptyStateMascot } from '../components/Mascots';
+import LocalOpportunityMap from '../components/LocalOpportunityMap';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
 
@@ -22,6 +23,22 @@ import toast from 'react-hot-toast';
   - Border Color: var(--color-border) [#E8E2D9 light / #2E2E42 dark]
 */
 
+const getMissingRequiredProfileFields = (profile = {}) => {
+  const checks = [
+    ['personal.age', 'Age', profile.personal?.age !== undefined && profile.personal?.age !== null && profile.personal?.age !== ''],
+    ['personal.gender', 'Gender', Boolean(profile.personal?.gender)],
+    ['education.level', 'Education level', Boolean(profile.education?.level)],
+    ['location.state', 'State', Boolean(profile.location?.state)],
+    ['location.district', 'District', Boolean(profile.location?.district)],
+    ['livelihood.currentOccupation', 'Current occupation', Boolean(profile.livelihood?.currentOccupation)],
+    ['skills', 'Skills', [profile.skills, profile.traditionalSkills].flat().some((item) => String(item || '').trim())],
+    ['interests', 'Work interests', Array.isArray(profile.interests) && profile.interests.some((item) => String(item || '').trim())],
+    ['aspirations', 'Livelihood goals', Array.isArray(profile.aspirations) && profile.aspirations.some((item) => String(item || '').trim())],
+    ['employmentPreference', 'Employment preference', Boolean(profile.employmentPreference)],
+  ];
+  return checks.filter(([, , present]) => !present).map(([field, label]) => ({ field, label }));
+};
+
 const Recommendations = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -30,8 +47,13 @@ const Recommendations = () => {
   const [recommendations, setRecommendations] = useState([]);
   const [loadError, setLoadError] = useState('');
   const [centers, setCenters] = useState([]);
+  const [opportunities, setOpportunities] = useState([]);
+  const [applications, setApplications] = useState([]);
+  const [applyingTo, setApplyingTo] = useState('');
   const [enrollmentCenters, setEnrollmentCenters] = useState([]);
   const [filter, setFilter] = useState('ALL');
+  const [profileIncomplete, setProfileIncomplete] = useState(false);
+  const [missingProfileFields, setMissingProfileFields] = useState([]);
 
   // Modal State for Enrollment
   const [selectedCourse, setSelectedCourse] = useState(null);
@@ -49,9 +71,28 @@ const Recommendations = () => {
     try {
       setLoading(true);
       setLoadError('');
-      const [recResult, centerResult] = await Promise.allSettled([
+      const profileResult = await client.get('/beneficiaries/profile/me');
+      const profile = profileResult.data?.data;
+      const serverMissingFields = Array.isArray(profile?.missingFields) ? profile.missingFields : [];
+      const requiredMissingFields = getMissingRequiredProfileFields(profile);
+      const missingFields = [...new Map([...serverMissingFields, ...requiredMissingFields].map((field) => [field.field, field])).values()];
+      setMissingProfileFields(missingFields);
+
+      if (!profile || !(Number(profile.profileCompletion) >= 100) || missingFields.length > 0) {
+        setProfileIncomplete(true);
+        setRecommendations([]);
+        setCenters([]);
+        setOpportunities([]);
+        setApplications([]);
+        return;
+      }
+
+      setProfileIncomplete(false);
+      const [recResult, centerResult, opportunityResult, applicationResult] = await Promise.allSettled([
         client.get('/recommendations'),
         client.get('/centres'),
+        client.get('/opportunities'),
+        client.get('/applications/mine'),
       ]);
 
       if (recResult.status === 'fulfilled' && recResult.value?.data?.success) {
@@ -60,9 +101,10 @@ const Recommendations = () => {
       } else {
         setRecommendations([]);
         const status = recResult.status === 'fulfilled' ? recResult.value?.status : recResult.reason?.response?.status;
-        if (status === 404) {
-          toast.error('Please complete your profile first');
-          navigate('/profile');
+        if (status === 404 || status === 409) {
+          const responseData = recResult.status === 'rejected' ? recResult.reason?.response?.data : recResult.value?.data;
+          setMissingProfileFields(Array.isArray(responseData?.missingFields) ? responseData.missingFields : []);
+          setProfileIncomplete(true);
           return;
         }
         setLoadError(t('recommendationsUnavailable'));
@@ -71,7 +113,25 @@ const Recommendations = () => {
       if (centerResult.status === 'fulfilled' && centerResult.value?.data?.success) {
         setCenters(Array.isArray(centerResult.value.data.data) ? centerResult.value.data.data : []);
       }
+
+      if (opportunityResult.status === 'fulfilled' && opportunityResult.value?.data?.success) {
+        setOpportunities(Array.isArray(opportunityResult.value.data.data) ? opportunityResult.value.data.data : []);
+      } else {
+        setOpportunities([]);
+      }
+      if (applicationResult.status === 'fulfilled' && applicationResult.value?.data?.success) {
+        setApplications(Array.isArray(applicationResult.value.data.data) ? applicationResult.value.data.data : []);
+      }
     } catch (err) {
+      if (err.response?.status === 404) {
+        setProfileIncomplete(true);
+        setMissingProfileFields([]);
+        setRecommendations([]);
+        setCenters([]);
+        setOpportunities([]);
+        setApplications([]);
+        return;
+      }
       console.error('Failed to fetch recommendations:', err);
       setLoadError(t('recommendationsUnavailable'));
       setRecommendations([]);
@@ -125,6 +185,64 @@ const Recommendations = () => {
     }
   };
 
+  const applyToOpportunity = async (opportunityId) => {
+    setApplyingTo(opportunityId);
+    try {
+      const response = await client.post(`/applications/${opportunityId}/apply`, {});
+      const application = response.data.data;
+      setApplications((current) => [application, ...current.filter((item) => String(item.opportunityId?._id || item.opportunityId) !== String(opportunityId))]);
+      toast.success(response.data.alreadyApplied ? 'You are already tracking this opportunity.' : 'Opportunity saved to your livelihood journey.');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Unable to track this application.');
+    } finally {
+      setApplyingTo('');
+    }
+  };
+
+  const withdrawApplication = async (applicationId) => {
+    try {
+      const response = await client.patch(`/applications/${applicationId}/status`, { status: 'WITHDRAWN', note: 'Withdrawn by beneficiary' });
+      setApplications((current) => current.map((item) => item._id === applicationId ? response.data.data : item));
+      toast.success('Application withdrawn.');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Unable to withdraw application.');
+    }
+  };
+
+  const opportunityCards = opportunities.map((opportunity) => {
+    const normalizedTitle = String(opportunity.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const matchedRecommendation = recommendations.find((recommendation) =>
+      recommendation.type === 'OPPORTUNITY'
+      && (
+        String(recommendation.id || '') === String(opportunity._id || opportunity.id || '')
+        || String(recommendation.details?.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() === normalizedTitle
+      ),
+    );
+    return {
+      type: 'OPPORTUNITY',
+      id: opportunity._id || opportunity.id || `catalog-${normalizedTitle}`,
+      score: matchedRecommendation?.score ?? null,
+      reasons: matchedRecommendation?.reasons || [
+        `${opportunity.type === 'SELF_EMPLOYMENT' ? 'Self-employment' : 'Wage employment'} listing from the opportunity catalog`,
+        ...(opportunity.requiredSkills || []).slice(0, 2).map((skill) => `Skills requested: ${skill}`),
+      ],
+      details: {
+        ...opportunity,
+        title: opportunity.title || opportunity.name || 'Employment opportunity',
+        pathwayType: opportunity.type,
+      },
+    };
+  });
+
+  const mergeOpportunityCards = (recommendationCards) => {
+    const normalizeTitle = (title) => String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const unmatchedCatalogCards = opportunityCards.filter((item) => !recommendationCards.some((recommendation) => {
+      const recommendationTitle = String(recommendation.details?.title || recommendation.details?.name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      return String(recommendation.id || '') === String(item.id) || normalizeTitle(item.details.title) === recommendationTitle;
+    }));
+    return [...recommendationCards, ...unmatchedCatalogCards];
+  };
+
   const filteredRecs = filter === 'CENTER'
     ? recommendations.flatMap((recommendation) => (recommendation.details?.trainingCenters || []).map((center) => ({
       ...recommendation,
@@ -141,7 +259,11 @@ const Recommendations = () => {
         ...(recommendation.reasons || []),
       ],
     })))
-    : recommendations.filter((recommendation) => filter === 'ALL' || recommendation.type === filter);
+    : filter === 'OPPORTUNITY'
+      ? mergeOpportunityCards(recommendations.filter((recommendation) => recommendation.type === 'OPPORTUNITY'))
+      : filter === 'ALL'
+        ? [...recommendations.filter((recommendation) => recommendation.type !== 'OPPORTUNITY'), ...mergeOpportunityCards(recommendations.filter((recommendation) => recommendation.type === 'OPPORTUNITY'))]
+        : recommendations.filter((recommendation) => recommendation.type === filter);
 
   const getTypeBadge = (type) => {
     switch (type) {
@@ -155,6 +277,38 @@ const Recommendations = () => {
         return { label: type, icon: Sparkles };
     }
   };
+
+  if (!loading && profileIncomplete) {
+    return (
+      <div className="mx-auto flex min-h-[50vh] max-w-5xl items-center px-4 py-10 sm:px-6 lg:px-8">
+        <section className="w-full border-y border-(--color-border) py-8 sm:py-10">
+          <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-(--color-accent-primary) text-white">
+            <Info className="h-6 w-6" />
+          </div>
+          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-(--color-accent-secondary)">Personalized for you</p>
+          <h1 className="mt-2 text-2xl font-black text-(--color-text-primary) sm:text-3xl">Complete your profile to see recommendations</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-(--color-text-secondary)">
+            Add your skills, interests, location, and work preferences first. We’ll use that information to match you with relevant training centres and employment opportunities.
+          </p>
+          {missingProfileFields.length > 0 && (
+            <div className="mt-5">
+              <p className="text-sm font-bold text-(--color-text-primary)">Still needed</p>
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {missingProfileFields.map((field) => (
+                  <li key={field.field} className="rounded-md border border-(--color-border) px-3 py-1.5 text-xs font-semibold text-(--color-text-secondary)">
+                    {field.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <Link to="/profile" className="btn-accent mt-6 inline-flex items-center gap-2 rounded-lg px-5 py-3 text-sm font-bold">
+            Complete profile <ArrowRight className="h-4 w-4" />
+          </Link>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 bg-[var(--color-bg)]">
@@ -219,6 +373,8 @@ const Recommendations = () => {
         })}
       </div>
 
+      {opportunities.length > 0 && <LocalOpportunityMap opportunities={opportunities} />}
+
       {/* Grid of Recommendation Cards */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -248,9 +404,11 @@ const Recommendations = () => {
           {filteredRecs.map((item, index) => {
             const badge = getTypeBadge(item?.type);
             const BadgeIcon = badge.icon;
-            const matchScorePct = Math.round((item?.score || 0) * 100);
+            const hasMatchScore = Number.isFinite(item?.score);
+            const matchScorePct = hasMatchScore ? Math.round(item.score * 100) : null;
             const title = item?.details?.courseName || item?.details?.name || item?.details?.title || 'Opportunity';
             const reasons = Array.isArray(item?.reasons) ? item.reasons : [];
+            const application = applications.find((candidate) => String(candidate.opportunityId?._id || candidate.opportunityId) === String(item.id));
 
             return (
               <motion.div
@@ -271,22 +429,26 @@ const Recommendations = () => {
 
                     {/* Animated Match Score Pill */}
                     <div className="text-right">
+                      {hasMatchScore ? (
                       <div className="inline-flex items-center space-x-1 text-sm font-black text-[var(--color-accent-primary)] bg-[var(--color-bg)] px-3 py-1 rounded-xl border border-[var(--color-border)] shadow-xs">
                         <span>{t('matchScore')}:</span>
                         <AnimatedCounter start={0} end={matchScorePct} duration={1.2} suffix="%" />
                       </div>
+                      ) : (
+                        <span className="inline-flex items-center rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1 text-xs font-bold text-[var(--color-text-secondary)]">Catalog listing</span>
+                      )}
                     </div>
                   </div>
 
                   {/* Score Progress Bar Fill */}
-                  <div className="w-full h-2 bg-[var(--color-bg)] rounded-full overflow-hidden mb-5 border border-[var(--color-border)]">
+                  {hasMatchScore && <div className="w-full h-2 bg-[var(--color-bg)] rounded-full overflow-hidden mb-5 border border-[var(--color-border)]">
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${matchScorePct}%` }}
                       transition={{ duration: 1, delay: 0.2 + index * 0.08 }}
                       className="h-full bg-[var(--color-accent-primary)] rounded-full"
                     />
-                  </div>
+                  </div>}
 
                   {/* Title & Details */}
                   <h3 className="text-lg font-black text-[var(--color-text-primary)] group-hover:text-[var(--color-accent-primary)] transition-colors">
@@ -331,6 +493,25 @@ const Recommendations = () => {
                       <span>{t('enrollInTraining')}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </motion.button>
+                  ) : item.type === 'OPPORTUNITY' ? (
+                    <div className="flex w-full gap-2">
+                      <button
+                        type="button"
+                        disabled={applyingTo === String(item.id) || (application && application.status !== 'WITHDRAWN')}
+                        onClick={() => applyToOpportunity(item.id)}
+                        className="min-w-0 flex-1 rounded-xl btn-accent py-2.5 text-xs font-extrabold shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {applyingTo === String(item.id) ? 'Saving...' : application && application.status !== 'WITHDRAWN' ? `Tracked · ${application.status.replace('_', ' ')}` : 'Track interest'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDetailsItem(item)}
+                        aria-label={`View ${title} details`}
+                        className="rounded-xl border border-[var(--color-border)] px-3 text-[var(--color-text-secondary)] hover:text-[var(--color-accent-primary)]"
+                      >
+                        <Info className="h-4 w-4" />
+                      </button>
+                    </div>
                   ) : (
                     <button
                       onClick={() => setSelectedDetailsItem(item)}
@@ -381,6 +562,7 @@ const Recommendations = () => {
               </div>
 
               {/* Match Score Banner */}
+              {Number.isFinite(selectedDetailsItem.score) ? (
               <div className="bg-[var(--color-bg)] p-4 rounded-2xl border border-[var(--color-border)] flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <ShieldCheck className="w-5 h-5 text-[var(--color-accent-secondary)]" />
@@ -390,6 +572,12 @@ const Recommendations = () => {
                   {Math.round((selectedDetailsItem.score || 0) * 100)}% Match
                 </span>
               </div>
+              ) : (
+                <div className="bg-[var(--color-bg)] p-4 rounded-2xl border border-[var(--color-border)] flex items-center justify-between">
+                  <span className="text-xs font-bold text-[var(--color-text-secondary)]">Employment catalog listing</span>
+                  <span className="text-xs font-black text-[var(--color-accent-secondary)]">{selectedDetailsItem.details?.type === 'SELF_EMPLOYMENT' ? 'Enterprise' : 'Wage employment'}</span>
+                </div>
+              )}
 
               {/* Detailed Grid Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -437,6 +625,33 @@ const Recommendations = () => {
                   </p>
                 </div>
               </div>
+
+              {selectedDetailsItem.type === 'OPPORTUNITY' && (() => {
+                const application = applications.find((candidate) => String(candidate.opportunityId?._id || candidate.opportunityId) === String(selectedDetailsItem.id));
+                if (!application) return null;
+                return (
+                  <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-extrabold uppercase text-[var(--color-text-secondary)]">Application status</p>
+                        <p className="mt-1 text-sm font-black text-[var(--color-accent-secondary)]">{application.status.replace('_', ' ')}</p>
+                      </div>
+                      {!['WITHDRAWN', 'REJECTED', 'HIRED'].includes(application.status) && (
+                        <button type="button" onClick={() => withdrawApplication(application._id)} className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-bold text-[var(--color-text-secondary)]">Withdraw</button>
+                      )}
+                    </div>
+                    <ol className="mt-3 space-y-2 border-l border-[var(--color-border)] pl-3">
+                      {(application.history || []).map((event, index) => (
+                        <li key={`${event.status}-${event.updatedAt}-${index}`} className="text-xs text-[var(--color-text-secondary)]">
+                          <span className="font-bold text-[var(--color-text-primary)]">{event.status.replace('_', ' ')}</span>
+                          {event.note && <span> · {event.note}</span>}
+                          <span className="block text-[10px] text-[var(--color-text-muted)]">{new Date(event.updatedAt).toLocaleString()}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                );
+              })()}
 
               {/* Facility Highlights / Requirements */}
               <div className="bg-[var(--color-bg)] p-4 rounded-2xl border border-[var(--color-border)] space-y-2">

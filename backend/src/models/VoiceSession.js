@@ -36,9 +36,15 @@ const voiceSessionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    workflowSnapshot: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    currentSlot: { type: String, trim: true, default: '' },
+    skippedSlots: { type: [String], default: [] },
     status: {
       type: String,
-      enum: ['ACTIVE', 'COMPLETED', 'ABANDONED'],
+      enum: ['ACTIVE', 'AWAITING_CONFIRMATION', 'COMPLETED', 'ABANDONED'],
       default: 'ACTIVE',
     },
     language: {

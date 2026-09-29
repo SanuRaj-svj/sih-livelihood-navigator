@@ -17,6 +17,7 @@ import Roadmap from './pages/Roadmap';
 import OfficerDashboard from './pages/OfficerDashboard';
 import IvrDemo from './pages/IvrDemo';
 import CertificateVerifier from './pages/CertificateVerifier';
+import VideoCall from './pages/VideoCall';
 
 // Animated Route Wrapper for Framer Motion Page Transitions
 const AnimatedRoutes = () => {
@@ -38,6 +39,15 @@ const AnimatedRoutes = () => {
           <Route path="/register" element={<Register />} />
           <Route path="/ivr-demo" element={<IvrDemo />} />
           <Route path="/certificate-verifier" element={<CertificateVerifier />} />
+
+          <Route
+            path="/video-call"
+            element={
+              <ProtectedRoute>
+                <VideoCall />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/profile"

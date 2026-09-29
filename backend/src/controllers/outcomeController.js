@@ -1,6 +1,7 @@
 const Outcome = require('../models/Outcome');
 const BeneficiaryProfile = require('../models/BeneficiaryProfile');
 const TrainingEnrollment = require('../models/TrainingEnrollment');
+const LivelihoodDigitalTwin = require('../models/LivelihoodDigitalTwin');
 
 // @desc    Record an outcome for a beneficiary
 // @route   POST /api/outcomes
@@ -33,9 +34,8 @@ const createOutcome = async (req, res, next) => {
 
     if (enrollmentId) {
       const enrollment = await TrainingEnrollment.findById(enrollmentId);
-      if (enrollment) {
-        enrollment.status = 'COMPLETED';
-        await enrollment.save();
+      if (!enrollment || String(enrollment.beneficiaryId) !== String(beneficiaryId)) {
+        return res.status(400).json({ success: false, message: 'Enrollment does not belong to this beneficiary' });
       }
     }
 
@@ -48,6 +48,15 @@ const createOutcome = async (req, res, next) => {
       dateAchieved: dateAchieved || new Date(),
       verifiedBy: req.user._id,
     });
+
+    await LivelihoodDigitalTwin.findOneAndUpdate(
+      { beneficiaryId },
+      {
+        $set: { 'outcomeTracking.status': 'TRACKING', 'outcomeTracking.lastVerifiedAt': new Date() },
+        $push: { 'outcomeTracking.outcomes': outcome.toObject() },
+      },
+      { sort: { updatedAt: -1 } },
+    );
 
     res.status(201).json({
       success: true,

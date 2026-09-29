@@ -40,11 +40,7 @@ const Login = () => {
     try {
       const user = await login(emailOrPhone, password);
       toast.success(`Welcome back, ${user.name}!`);
-      if (user.role === 'OFFICER' || user.role === 'ADMIN') {
-        navigate('/officer-dashboard');
-      } else {
-        navigate('/recommendations');
-      }
+      navigate('/');
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Login failed';
       toast.error(msg);
@@ -84,13 +80,17 @@ const Login = () => {
         <div className="w-full md:w-1/2">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
+              <label htmlFor="login-email-or-phone" className="block text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
                 Email or Phone
               </label>
               <div className="relative">
                 <Mail className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
                 <input
+                  id="login-email-or-phone"
+                  name="emailOrPhone"
                   type="text"
+                  autoComplete="username"
+                  aria-label="Email or Phone"
                   value={emailOrPhone}
                   onChange={(e) => setEmailOrPhone(e.target.value)}
                   placeholder="email@example.com or 9876543210"
@@ -100,13 +100,16 @@ const Login = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
+              <label htmlFor="login-password" className="block text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1.5">
                 Password
               </label>
               <div className="relative">
                 <Lock className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
                 <input
+                  id="login-password"
+                  name="password"
                   type="password"
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"

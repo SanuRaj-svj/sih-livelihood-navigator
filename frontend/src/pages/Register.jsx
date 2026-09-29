@@ -42,7 +42,7 @@ const Register = () => {
     try {
       const user = await register(name, email, phone, password);
       toast.success(`Account created! Welcome, ${user.name}`);
-      navigate('/profile');
+      navigate('/');
     } catch (err) {
       const msg = err.response?.data?.message || err.message || 'Registration failed';
       toast.error(msg);
@@ -82,13 +82,16 @@ const Register = () => {
         <div className="w-full md:w-1/2">
           <form onSubmit={handleSubmit} className="space-y-3.5">
             <div>
-              <label className="block text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1">
+              <label htmlFor="register-name" className="block text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1">
                 Full Name
               </label>
               <div className="relative">
                 <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
                 <input
+                  id="register-name"
+                  name="name"
                   type="text"
+                  autoComplete="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Ramesh Kumar"
@@ -98,13 +101,16 @@ const Register = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1">
+              <label htmlFor="register-email" className="block text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1">
                 Email Address
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
                 <input
+                  id="register-email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="ramesh@example.com"
@@ -114,13 +120,16 @@ const Register = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1">
+              <label htmlFor="register-phone" className="block text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1">
                 Phone Number
               </label>
               <div className="relative">
                 <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
                 <input
+                  id="register-phone"
+                  name="phone"
                   type="tel"
+                  autoComplete="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="9876543210"
@@ -130,13 +139,16 @@ const Register = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1">
+              <label htmlFor="register-password" className="block text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-1">
                 Password
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
                 <input
+                  id="register-password"
+                  name="password"
                   type="password"
+                  autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"

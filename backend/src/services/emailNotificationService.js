@@ -96,11 +96,37 @@ const sendAnswerNotification = async ({ session, answer }) => {
     return false;
   }
 
+
+const sendTrainingCheckInReminder = async ({ recipientEmail, beneficiaryName, courseName, centerName, dueAt }) => {
+  if (!env.EMAIL_NOTIFICATIONS_ENABLED || !env.EMAIL_USER || !env.EMAIL_APP_PASSWORD || !recipientEmail) return false;
+  try {
+    await getTransporter().sendMail({
+      from: `Livelihood Navigator <${env.EMAIL_USER}>`,
+      to: recipientEmail,
+      subject: `Training check-in reminder: ${courseName || 'your training'}`,
+      text: [
+        `Dear ${beneficiaryName || 'Beneficiary'},`,
+        '',
+        'Please update your attendance and current module in your Livelihood Navigator journey.',
+        `Course: ${courseName || 'Training course'}`,
+        `Training centre: ${centerName || 'Training centre'}`,
+        dueAt ? `Check-in due since: ${new Date(dueAt).toLocaleDateString()}` : '',
+        '',
+        'If you need help continuing, use the support action in your journey to request officer follow-up.',
+      ].filter(Boolean).join('\n'),
+    });
+    return true;
+  } catch (error) {
+    console.error(`Training check-in reminder failed: ${error.message}`);
+    return false;
+  }
+};
   const profile = session.extractedProfileData || {};
   try {
     await getTransporter().sendMail({
       from: `Livelihood IVR <${env.EMAIL_USER}>`,
       to: env.EMAIL_RECIPIENT,
+  sendTrainingCheckInReminder,
       subject: `IVR answer recorded: ${session.sessionId}`,
       text: [
         'A livelihood IVR answer was recorded.',
@@ -122,8 +148,34 @@ const sendAnswerNotification = async ({ session, answer }) => {
   }
 };
 
+const sendTrainingCheckInReminder = async ({ recipientEmail, beneficiaryName, courseName, centerName, dueAt }) => {
+  if (!env.EMAIL_NOTIFICATIONS_ENABLED || !env.EMAIL_USER || !env.EMAIL_APP_PASSWORD || !recipientEmail) return false;
+  try {
+    await getTransporter().sendMail({
+      from: `Livelihood Navigator <${env.EMAIL_USER}>`,
+      to: recipientEmail,
+      subject: `Training check-in reminder: ${courseName || 'your training'}`,
+      text: [
+        `Dear ${beneficiaryName || 'Beneficiary'},`,
+        '',
+        'Please update your attendance and current module in your Livelihood Navigator journey.',
+        `Course: ${courseName || 'Training course'}`,
+        `Training centre: ${centerName || 'Training centre'}`,
+        dueAt ? `Check-in due since: ${new Date(dueAt).toLocaleDateString()}` : '',
+        '',
+        'If you need help continuing, use the support action in your journey to request officer follow-up.',
+      ].filter(Boolean).join('\n'),
+    });
+    return true;
+  } catch (error) {
+    console.error(`Training check-in reminder failed: ${error.message}`);
+    return false;
+  }
+};
+
 module.exports = {
   sendAnswerNotification,
   buildCertificateEmailContent,
   sendCertificateIssuedEmail,
+  sendTrainingCheckInReminder,
 };

@@ -4,7 +4,7 @@ import gsap from 'gsap';
 import client from '../api/client';
 import { useLanguage } from '../context/LanguageContext';
 import { CardSkeleton } from '../components/SkeletonLoader';
-import { Map, BookOpen, Building2, CheckCircle2, Clock, Sparkles, Trophy, IndianRupee, Briefcase, ArrowUpRight, ShieldCheck } from 'lucide-react';
+import { Map, BookOpen, Building2, CheckCircle2, Clock, Sparkles, Trophy, IndianRupee, Briefcase, ArrowUpRight, ShieldCheck, Lightbulb, Landmark, Store, Target } from 'lucide-react';
 import { JourneyMascot, EmptyStateMascot } from '../components/Mascots';
 import toast from 'react-hot-toast';
 
@@ -26,6 +26,9 @@ const Roadmap = () => {
   const [loading, setLoading] = useState(true);
   const [certificateId, setCertificateId] = useState('');
   const [unlocking, setUnlocking] = useState(false);
+  const [reportingDropout, setReportingDropout] = useState('');
+  const [checkInForms, setCheckInForms] = useState({});
+  const [savingCheckIn, setSavingCheckIn] = useState('');
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -61,6 +64,50 @@ const Roadmap = () => {
     }
   };
 
+  const reportDropout = async (enrollmentId) => {
+    try {
+      setReportingDropout(enrollmentId);
+      await client.patch(`/enrollments/${enrollmentId}/dropout`, { reason: 'Beneficiary requested support to continue training.' });
+      toast.success('Your request was sent to an officer for follow-up.');
+      await fetchMyEnrollments();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Unable to request follow-up.');
+    } finally {
+      setReportingDropout('');
+    }
+  };
+
+  const updateCheckInForm = (enrollmentId, field, value) => {
+    setCheckInForms((current) => ({
+      ...current,
+      [enrollmentId]: { ...(current[enrollmentId] || {}), [field]: value },
+    }));
+  };
+
+  const submitTrainingCheckIn = async (event, enrollment) => {
+    event.preventDefault();
+    const values = checkInForms[enrollment._id] || {};
+    const attendancePercentage = Number(values.attendancePercentage ?? enrollment.progress?.attendancePercentage ?? 0);
+    if (!Number.isFinite(attendancePercentage) || attendancePercentage < 0 || attendancePercentage > 100) {
+      toast.error('Enter attendance between 0 and 100.');
+      return;
+    }
+    try {
+      setSavingCheckIn(enrollment._id);
+      await client.post(`/enrollments/${enrollment._id}/check-ins`, {
+        attendancePercentage,
+        currentModule: values.currentModule ?? enrollment.progress?.currentModule ?? '',
+        notes: values.notes || '',
+      });
+      toast.success('Training check-in saved.');
+      await fetchMyEnrollments();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Unable to save training check-in.');
+    } finally {
+      setSavingCheckIn('');
+    }
+  };
+
   useEffect(() => {
     if (loading || enrollments.length === 0 || !containerRef.current) return;
 
@@ -88,11 +135,12 @@ const Roadmap = () => {
   }, [loading, enrollments]);
 
   const stages = [
-    { key: 'RECOMMENDED', label: 'Recommended', icon: Sparkles },
-    { key: 'ENROLLED', label: 'Enrolled', icon: BookOpen },
-    { key: 'IN_PROGRESS', label: 'In Progress', icon: Clock },
-    { key: 'COMPLETED', label: 'Completed', icon: CheckCircle2 },
-    { key: 'OUTCOME', label: 'Outcome', icon: Trophy },
+    { key: 'TRAINING', label: 'Training', icon: BookOpen },
+    { key: 'BUSINESS_IDEA', label: 'Business Idea', icon: Lightbulb },
+    { key: 'GOVERNMENT_SCHEME', label: 'Government Scheme', icon: Landmark },
+    { key: 'FUNDING', label: 'Funding', icon: IndianRupee },
+    { key: 'MARKET', label: 'Market', icon: Store },
+    { key: 'BUSINESS', label: 'Business', icon: Target },
   ];
 
   const getActiveStageIndex = (enrollment) => {
@@ -100,9 +148,9 @@ const Roadmap = () => {
     const progress = enrollment.progress;
     const outcome = enrollment.outcome;
 
-    if (outcome) return 4;
-    if (status === 'COMPLETED') return 3;
-    if (status === 'IN_PROGRESS' || (progress && progress.attendancePercentage > 0)) return 2;
+    if (outcome) return 5;
+    if (status === 'COMPLETED') return 4;
+    if (status === 'IN_PROGRESS' || (progress && progress.attendancePercentage > 0)) return 3;
     if (status === 'ENROLLED') return 1;
     return 0;
   };
@@ -174,6 +222,7 @@ const Roadmap = () => {
             const progressPct = ((activeStageIdx) / (stages.length - 1)) * 100;
             const progress = enrollment.progress;
             const outcome = enrollment.outcome;
+            const certificateTimeline = enrollment.certificateTimeline;
 
             return (
               <motion.div
@@ -214,9 +263,72 @@ const Roadmap = () => {
                   )}
                 </div>
 
+                <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg)] p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-black text-[var(--color-text-primary)]">Training certificate status</h3>
+                    {certificateTimeline?.notificationStatus === 'SENT' && <span className="text-[10px] font-bold text-emerald-700">Email sent</span>}
+                  </div>
+                  <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {[
+                      {
+                        label: 'Enrollment approval',
+                        status: certificateTimeline?.enrollmentApproval === 'APPROVED' ? 'Approved' : 'Awaiting officer review',
+                        done: certificateTimeline?.enrollmentApproval === 'APPROVED',
+                      },
+                      {
+                        label: 'Training',
+                        status: enrollment.status === 'COMPLETED' ? 'Completed' : enrollment.enrollmentCertificateVerifiedAt ? 'In progress' : 'Starts after certificate unlock',
+                        done: enrollment.status === 'COMPLETED',
+                      },
+                      {
+                        label: 'Completion review',
+                        status: certificateTimeline?.completionReview === 'APPROVED' ? 'Approved' : certificateTimeline?.completionReview === 'AWAITING_OFFICER_REVIEW' ? 'Awaiting officer review' : 'Not ready',
+                        done: certificateTimeline?.completionReview === 'APPROVED',
+                      },
+                      {
+                        label: 'Completion certificate',
+                        status: certificateTimeline?.completionCertificateId ? 'Ready to download' : 'Not issued yet',
+                        done: Boolean(certificateTimeline?.completionCertificateId),
+                      },
+                    ].map((stage) => (
+                      <li key={stage.label} className={`rounded-xl border p-3 ${stage.done ? 'border-emerald-300 bg-emerald-50' : 'border-[var(--color-border)] bg-[var(--color-surface)]'}`}>
+                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-text-secondary)]">{stage.label}</p>
+                        <p className={`mt-1 text-xs font-black ${stage.done ? 'text-emerald-800' : 'text-[var(--color-text-primary)]'}`}>{stage.status}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+
+                {enrollment.completionCertificateId && (
+                  <div className="flex flex-col gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-extrabold uppercase tracking-wider text-emerald-800">Completion certificate issued</p>
+                      <p className="mt-1 text-sm font-bold text-emerald-950">{enrollment.completionCertificateId}</p>
+                      <p className="mt-1 text-xs text-emerald-800">
+                        {certificateTimeline?.notificationStatus === 'SENT'
+                          ? `Email sent ${certificateTimeline.beneficiaryNotifiedAt ? new Date(certificateTimeline.beneficiaryNotifiedAt).toLocaleString() : ''}`
+                          : 'PDF is ready here; email delivery is not confirmed.'}
+                      </p>
+                    </div>
+                    <a
+                      href={`/api/certificates/download/${encodeURIComponent(enrollment.completionCertificateId)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-800"
+                    >
+                      <ShieldCheck className="h-4 w-4" /> Download completion certificate
+                    </a>
+                  </div>
+                )}
+
                 {/* VISUAL JOURNEY TIMELINE */}
                 <div className="py-4">
-                  <p className="text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider mb-6">{t('visualTimeline')}</p>
+                  <div className="mb-6 flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-extrabold text-[var(--color-text-secondary)] uppercase tracking-wider">{t('visualTimeline')}</p>
+                    <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-[var(--color-accent-primary)]">
+                      Training → Business Idea → Government Scheme → Funding → Market → Business
+                    </span>
+                  </div>
 
                   <div className="relative">
                     {/* Background track line */}
@@ -306,6 +418,64 @@ const Roadmap = () => {
                     </div>
                   )}
                 </div>
+
+                {['ENROLLED', 'IN_PROGRESS'].includes(enrollment.status) && (
+                  <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 space-y-4">
+                    <div>
+                      <h3 className="text-sm font-black text-[var(--color-text-primary)]">Training check-in</h3>
+                      <p className="mt-1 text-xs text-[var(--color-text-secondary)]">Record your latest attendance and learning progress.</p>
+                      {enrollment.nextCheckInAt && <p className="mt-1 text-xs font-bold text-[var(--color-accent-secondary)]">Next check-in due {new Date(enrollment.nextCheckInAt).toLocaleDateString()}. Reminder email is scheduled 2 days before.</p>}
+                    </div>
+                    {!enrollment.enrollmentCertificateVerifiedAt ? (
+                      <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs font-semibold text-amber-800">Verify your enrollment certificate above to submit check-ins.</p>
+                    ) : (
+                      <form onSubmit={(event) => submitTrainingCheckIn(event, enrollment)} className="grid gap-3 sm:grid-cols-2">
+                        <label className="text-xs font-bold text-[var(--color-text-secondary)]">
+                          Attendance percentage
+                          <input type="number" min="0" max="100" required value={checkInForms[enrollment._id]?.attendancePercentage ?? enrollment.progress?.attendancePercentage ?? 0} onChange={(event) => updateCheckInForm(enrollment._id, 'attendancePercentage', event.target.value)} className="app-input mt-1 w-full rounded-xl px-3 py-2 text-sm" />
+                        </label>
+                        <label className="text-xs font-bold text-[var(--color-text-secondary)]">
+                          Current module
+                          <input type="text" maxLength="160" value={checkInForms[enrollment._id]?.currentModule ?? enrollment.progress?.currentModule ?? ''} onChange={(event) => updateCheckInForm(enrollment._id, 'currentModule', event.target.value)} placeholder="Module or milestone" className="app-input mt-1 w-full rounded-xl px-3 py-2 text-sm" />
+                        </label>
+                        <label className="text-xs font-bold text-[var(--color-text-secondary)] sm:col-span-2">
+                          Notes
+                          <textarea maxLength="1000" rows={2} value={checkInForms[enrollment._id]?.notes ?? ''} onChange={(event) => updateCheckInForm(enrollment._id, 'notes', event.target.value)} placeholder="Progress, questions, or support needed" className="app-input mt-1 w-full rounded-xl px-3 py-2 text-sm" />
+                        </label>
+                        <div className="flex items-center justify-between gap-3 sm:col-span-2">
+                          <span className="text-xs text-[var(--color-text-muted)]">{progress?.checkIns?.length || 0} saved check-ins</span>
+                          <button type="submit" disabled={savingCheckIn === enrollment._id} className="rounded-xl bg-[var(--color-accent-secondary)] px-4 py-2 text-sm font-bold text-white disabled:opacity-60">
+                            {savingCheckIn === enrollment._id ? 'Saving...' : 'Save check-in'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                    {progress?.checkIns?.length > 0 && (
+                      <div className="space-y-2 border-t border-[var(--color-border)] pt-3">
+                        <p className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-text-secondary)]">Recent updates</p>
+                        {progress.checkIns.slice(-3).reverse().map((checkIn, checkInIndex) => (
+                          <div key={checkIn._id || `${checkIn.submittedAt}-${checkInIndex}`} className="flex flex-wrap justify-between gap-2 text-xs text-[var(--color-text-secondary)]">
+                            <span><strong className="text-[var(--color-text-primary)]">{checkIn.attendancePercentage}%</strong> · {checkIn.currentModule || 'Progress update'}{checkIn.notes ? ` · ${checkIn.notes}` : ''}</span>
+                            <time>{new Date(checkIn.submittedAt).toLocaleDateString()}</time>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                {['ENROLLED', 'IN_PROGRESS'].includes(enrollment.status) && (
+                  <div className="flex justify-end border-t border-[var(--color-border)] pt-4">
+                    <button
+                      type="button"
+                      onClick={() => reportDropout(enrollment._id)}
+                      disabled={reportingDropout === enrollment._id}
+                      className="rounded-xl border border-[var(--color-border)] px-4 py-2 text-sm font-bold text-[var(--color-text-secondary)] hover:border-[var(--color-accent-primary)] hover:text-[var(--color-accent-primary)] disabled:opacity-60"
+                    >
+                      {reportingDropout === enrollment._id ? 'Sending request...' : 'Report dropout and request support'}
+                    </button>
+                  </div>
+                )}
               </motion.div>
             );
           })}

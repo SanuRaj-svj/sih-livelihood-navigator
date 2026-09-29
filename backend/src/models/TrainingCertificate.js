@@ -18,6 +18,8 @@ const trainingCertificateSchema = new mongoose.Schema(
     },
     issuedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     issuedAt: { type: Date, default: Date.now },
+    beneficiaryNotifiedAt: { type: Date, default: null },
+    notificationStatus: { type: String, enum: ['NOT_SENT', 'SENT'], default: 'NOT_SENT' },
     revokedAt: { type: Date, default: null },
   },
   { timestamps: true },

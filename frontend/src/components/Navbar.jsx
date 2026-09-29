@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Sparkles, Map, User, LayoutDashboard, LogOut, Compass, Sun, Moon, Globe, PhoneCall, ShieldCheck } from 'lucide-react';
+import { Sparkles, Map, User, LayoutDashboard, LogOut, Compass, Sun, Moon, Globe, PhoneCall, ShieldCheck, Video } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 /*
@@ -37,11 +37,13 @@ const Navbar = () => {
     { labelKey: 'navJourney', path: '/roadmap', icon: Map, roles: ['BENEFICIARY'] },
     { labelKey: 'navOfficer', path: '/officer-dashboard', icon: LayoutDashboard, roles: ['OFFICER', 'ADMIN'] },
     { labelKey: 'Certificate', path: '/certificate-verifier', icon: ShieldCheck, roles: ['BENEFICIARY', 'OFFICER', 'ADMIN'] },
+    { labelKey: 'Video call', path: '/video-call', icon: Video, roles: ['BENEFICIARY', 'OFFICER', 'ADMIN'] },
   ];
 
   const filteredNav = navItems.filter((item) => !user || item.roles.includes(user.role));
 
   return (
+    <>
     <header className="site-navbar sticky top-0 z-50">
       <div className="site-navbar-inner max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-[72px] flex flex-wrap items-center justify-between gap-2 py-2 sm:py-3">
         {/* Brand Logo */}
@@ -143,12 +145,6 @@ const Navbar = () => {
 
           {user ? (
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-bold text-[var(--color-text-primary)]">{user.name}</p>
-                <span className="inline-block text-[10px] px-2 py-0.5 rounded-full font-bold border uppercase tracking-wider bg-[var(--color-bg)] text-[var(--color-accent-secondary)] border-[var(--color-accent-secondary)]">
-                  {user.role}
-                </span>
-              </div>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -183,7 +179,14 @@ const Navbar = () => {
           )}
         </div>
       </div>
+      {user && (
+        <div className="navbar-identity-strip" aria-label="Signed-in account">
+          <span className="navbar-identity-name">{user.name}</span>
+          <span className="navbar-identity-role">{user.role}</span>
+        </div>
+      )}
     </header>
+    </>
   );
 };
 

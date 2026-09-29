@@ -21,6 +21,12 @@ def test_production_rejects_cors_wildcard_and_malformed_runtime_settings():
         Settings(LOG_LEVEL="verbose")
 
 
+def test_warn_style_environment_values_are_tolerated():
+    config = Settings(DEBUG="WARN", LOG_LEVEL="WARN")
+    assert config.DEBUG is False
+    assert config.LOG_LEVEL == "WARNING"
+
+
 def test_application_starts_and_exposes_health_and_openapi_without_optional_providers():
     # Creating the app does not construct Gemini or Whisper models.
     with TestClient(create_application()) as client:

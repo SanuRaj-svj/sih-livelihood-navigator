@@ -1,13 +1,16 @@
 const env = require('../../config/env');
 
 const EDUCATION_LEVELS = {
+  'Below 8th': 'primary',
   '1st Pass': 'primary',
   '5th Pass': 'primary',
   '8th Pass': 'middle',
+  'Below 8': 'primary',
   '10th Pass': 'secondary_10th',
   '12th Pass': 'higher_secondary_12th',
   Diploma: 'diploma',
   ITI: 'iti',
+  'ITI/Diploma': 'diploma',
   Graduate: 'graduate',
   'Post Graduate': 'post_graduate',
 };

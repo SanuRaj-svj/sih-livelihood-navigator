@@ -7,11 +7,16 @@ const interventionSchema = new mongoose.Schema(
       ref: 'BeneficiaryProfile',
       required: [true, 'Beneficiary ID is required'],
     },
+    enrollmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TrainingEnrollment',
+    },
     raisedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Officer user ID is required'],
     },
+    source: { type: String, enum: ['OFFICER', 'SYSTEM'], default: 'OFFICER' },
+    sourceKey: { type: String, trim: true, sparse: true, unique: true },
     reason: {
       type: String,
       required: [true, 'Intervention reason is required'],
@@ -40,6 +45,7 @@ const interventionSchema = new mongoose.Schema(
 
 interventionSchema.index({ beneficiaryId: 1, status: 1 });
 interventionSchema.index({ status: 1, riskLevel: 1 });
+interventionSchema.index({ enrollmentId: 1, status: 1 });
 
 const Intervention = mongoose.model('Intervention', interventionSchema);
 

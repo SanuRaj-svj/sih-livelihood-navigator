@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Headphones, Mic, Phone, PhoneCall, RotateCcw, Send, Wifi, WifiOff } from 'lucide-react';
+import { Headphones, Mic, Phone, PhoneCall, RotateCcw, Send, SkipForward, Wifi, WifiOff } from 'lucide-react';
 
 const LOCAL_PROMPTS = [
   'Welcome to Livelihood Assistant. Please tell us about your work, skills, or interests.',
@@ -23,9 +23,13 @@ const xmlPrompt = (xml) => {
 const isProviderFailure = (xml) => xml.includes('unable to process your response');
 
 const postForm = async (path, values) => {
+  const token = localStorage.getItem('token');
   const response = await fetch(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: new URLSearchParams(values),
   });
   const body = await response.text();
@@ -57,7 +61,15 @@ function IvrDemo() {
     setIsComplete(false);
     try {
       const xml = await postForm('/api/ivr/voice', { CallSid: nextCallId, Language: 'en' });
-      setPrompt(xmlPrompt(xml));
+      const openingPrompt = xmlPrompt(xml);
+      setPrompt(openingPrompt);
+      if (/<Hangup\s*\/>/i.test(xml)) {
+        setIsLive(false);
+        setIsComplete(true);
+        addMessage('assistant', openingPrompt);
+        setIsCalling(false);
+        return;
+      }
       setIsLive(!isProviderFailure(xml));
     } catch {
       setPrompt(LOCAL_PROMPTS[0]);
@@ -86,6 +98,7 @@ function IvrDemo() {
         if (isProviderFailure(xml)) throw new Error('AI service unavailable');
         setPrompt(xmlPrompt(xml));
         addMessage('assistant', xmlPrompt(xml));
+        if (/<Hangup\s*\/>/i.test(xml)) setIsComplete(true);
         setIsCalling(false);
         return;
       } catch {
@@ -172,6 +185,14 @@ function IvrDemo() {
               <div className="flex gap-2">
                 <input value={answer} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && sendAnswer()} placeholder="Type the caller's answer" className="app-input min-w-0 flex-1 rounded-xl px-4 py-3 text-sm" />
                 <button type="button" onClick={() => sendAnswer()} title="Send response" className="btn-accent rounded-xl px-4"><Send className="h-5 w-5" /></button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => sendAnswer('repeat')} disabled={!isLive || !callId || isComplete || isCalling} className="flex items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-secondary)] hover:border-[var(--color-accent-primary)] disabled:opacity-50">
+                  <RotateCcw className="h-4 w-4" /> Repeat question
+                </button>
+                <button type="button" onClick={() => sendAnswer('skip')} disabled={!isLive || !callId || isComplete || isCalling} className="flex items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-secondary)] hover:border-[var(--color-accent-primary)] disabled:opacity-50">
+                  <SkipForward className="h-4 w-4" /> Skip question
+                </button>
               </div>
               <button type="button" onClick={reset} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] px-4 py-2 text-sm font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]">
                 <RotateCcw className="h-4 w-4" /> Reset session

@@ -21,22 +21,45 @@ test('health endpoint reports dependency-aware status shape', async () => {
 test('certificate routes are mounted on the API', () => {
   const routePaths = [];
 
-  const walkRoutes = (stack, mountPath = '') => {
+  const walkRoutes = (stack) => {
     for (const layer of stack) {
       if (layer.route) {
-        const methods = Object.keys(layer.route.methods);
-        methods.forEach((method) => {
-          routePaths.push(`${method.toUpperCase()} ${mountPath}${layer.route.path}`);
+        Object.keys(layer.route.methods).forEach((method) => {
+          routePaths.push(`${method.toUpperCase()} ${layer.route.path}`);
         });
-      } else if (layer.name === 'router' && layer.handle && layer.handle.stack) {
-        const nextMount = mountPath + (layer.regexp && typeof layer.regexp.source === 'string' && layer.regexp.source !== '/^\\/.*?\//' ? layer.regexp.source.replace(/^\^\\\//, '').replace(/\\\/$/, '') : '');
-        walkRoutes(layer.handle.stack, nextMount || mountPath);
+      } else if (layer.handle && layer.handle.stack) {
+        walkRoutes(layer.handle.stack);
       }
     }
   };
 
   walkRoutes(app.router.stack);
 
-  assert.ok(routePaths.some((entry) => entry.includes('GET /api/certificates/verify/')) || routePaths.some((entry) => entry.includes('GET /certificates/verify/')));
-  assert.ok(routePaths.some((entry) => entry.includes('POST /api/certificates/:enrollmentId/issue')) || routePaths.some((entry) => entry.includes('POST /certificates/:enrollmentId/issue')));
+  assert.ok(routePaths.includes('GET /verify/:certificateId'));
+  assert.ok(routePaths.includes('POST /:enrollmentId/issue'));
+});
+
+test('livelihood workflow and source document routes are mounted', () => {
+  const routePaths = [];
+  const walkRoutes = (stack) => {
+    for (const layer of stack) {
+      if (layer.route) {
+        Object.keys(layer.route.methods).forEach((method) => routePaths.push(`${method.toUpperCase()} ${layer.route.path}`));
+      } else if (layer.handle && layer.handle.stack) {
+        walkRoutes(layer.handle.stack);
+      }
+    }
+  };
+  walkRoutes(app.router.stack);
+
+  assert.ok(routePaths.includes('GET /review-queue'));
+  assert.ok(routePaths.includes('PATCH /:id/review'));
+  assert.ok(routePaths.includes('POST /source-certificates'));
+  assert.ok(routePaths.includes('GET /pending'));
+  assert.ok(routePaths.includes('PATCH /:id/complete'));
+  assert.ok(routePaths.includes('POST /:id/check-ins'));
+  assert.ok(routePaths.includes('POST /:opportunityId/apply'));
+  assert.ok(routePaths.includes('GET /mine'));
+  assert.ok(routePaths.includes('GET /profiles/incomplete'));
+  assert.ok(routePaths.includes('POST /profile/:id/correction-requests'));
 });

@@ -1,5 +1,13 @@
 const mongoose = require('mongoose');
 
+const checkInSchema = new mongoose.Schema({
+  attendancePercentage: { type: Number, min: 0, max: 100, required: true },
+  currentModule: { type: String, trim: true, default: '' },
+  notes: { type: String, trim: true, maxlength: 1000, default: '' },
+  submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  submittedAt: { type: Date, default: Date.now },
+}, { _id: true });
+
 const trainingProgressSchema = new mongoose.Schema(
   {
     enrollmentId: {
@@ -34,6 +42,7 @@ const trainingProgressSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    checkIns: { type: [checkInSchema], default: [] },
   },
   {
     timestamps: true,

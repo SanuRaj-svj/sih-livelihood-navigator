@@ -4,6 +4,7 @@ const TrainingProgress = require('../models/TrainingProgress');
 const { createRecordHash, buildCertificateId } = require('../services/blockchainProofService');
 const { sendCertificateIssuedEmail } = require('../services/emailNotificationService');
 const PDFDocument = require('pdfkit');
+const { nextCheckInAt } = require('../services/trainingCheckInReminderService');
 
 const generateCertificatePdfBuffer = async (certificate) => {
   const snapshot = certificate.recordSnapshot || {};
@@ -86,7 +87,7 @@ const issueCertificateForEnrollment = async (enrollmentId, issuerUserId = null, 
   const pdfBuffer = await generateCertificatePdfBuffer(certificate);
 
   if (beneficiaryEmail) {
-    await sendCertificateIssuedEmail({
+    const notificationSent = await sendCertificateIssuedEmail({
       recipientEmail: beneficiaryEmail,
       beneficiaryName,
       courseName: snapshot.courseName,
@@ -94,6 +95,11 @@ const issueCertificateForEnrollment = async (enrollmentId, issuerUserId = null, 
       certificate,
       pdfBuffer,
     });
+    if (notificationSent) {
+      certificate.notificationStatus = 'SENT';
+      certificate.beneficiaryNotifiedAt = new Date();
+      await certificate.save();
+    }
   }
 
   return { success: true, data: certificate };
@@ -133,6 +139,9 @@ const unlockEnrollment = async (req, res, next) => {
     }
 
     enrollment.enrollmentCertificateVerifiedAt = new Date();
+    enrollment.nextCheckInAt = nextCheckInAt(enrollment.enrollmentCertificateVerifiedAt);
+    enrollment.lastCheckInReminderAt = null;
+    enrollment.lastCheckInReminderFor = null;
     await enrollment.save();
     return res.json({ success: true, enrollmentId: enrollment._id, message: 'Enrollment unlocked successfully' });
   } catch (error) {
